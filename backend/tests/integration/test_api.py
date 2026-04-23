@@ -20,9 +20,21 @@ async def test_root(client):
 
 
 @pytest.mark.asyncio
-async def test_ingest_requires_pdf_url(client):
+async def test_ingest_requires_pdf_url_or_manual_fields(client):
+    # Empty body — missing both pdf_url and manual fields
     response = await client.post("/api/papers/ingest", json={})
-    assert response.status_code == 400
+    assert response.status_code == 422  # Pydantic validation error
+
+    # title without abstract — still invalid
+    response = await client.post("/api/papers/ingest", json={"title": "A Paper"})
+    assert response.status_code == 422
+
+    # manual path with both required fields — valid
+    response = await client.post(
+        "/api/papers/ingest",
+        json={"title": "A Paper", "abstract": "This paper studies X."},
+    )
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
