@@ -6,7 +6,7 @@ Nothing touches the database without passing through validation here.
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PaperExtraction(BaseModel):
@@ -66,8 +66,22 @@ class ExpertResponse(BaseModel):
 # ── API request/response shapes ───────────────────────────────────────────────
 
 class IngestRequest(BaseModel):
-    pdf_url: Optional[str] = None  # public URL or S3 URI
-    paper_id: Optional[str] = None  # if re-ingesting existing paper
+    # Path 1 — PDF URL (ingestion agent downloads + extracts everything)
+    pdf_url: Optional[str] = None
+
+    # Path 2 — Manual fields (no PDF needed; pdf_url takes priority if both provided)
+    paper_id: Optional[str] = None
+    title: Optional[str] = None
+    authors: Optional[list[str]] = None
+    abstract: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_pdf_url_or_manual_fields(self) -> "IngestRequest":
+        has_pdf = bool(self.pdf_url)
+        has_manual = bool(self.title and self.abstract)
+        if not has_pdf and not has_manual:
+            raise ValueError("Provide either pdf_url or (title + abstract)")
+        return self
 
 
 class IngestResponse(BaseModel):

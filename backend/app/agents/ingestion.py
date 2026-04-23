@@ -97,6 +97,40 @@ async def _extract_text(pdf_url: str) -> str:
     return text[:12000]  # cap at ~3k tokens for LLM enrichment
 
 
+async def run_manual(
+    paper_id: str,
+    title: str,
+    authors: list[str],
+    abstract: str,
+) -> PaperExtraction:
+    """Manual ingestion path — enrich from provided fields without downloading a PDF."""
+    lf = get_langfuse()
+    trace_obj = lf.trace(name="ingestion-agent-manual", input={"paper_id": paper_id}) if lf else None
+
+    try:
+        extraction = await _enrich(abstract, paper_id)
+        extraction = extraction.model_copy(update={"title": title, "authors": authors})
+
+        vector = await embed_svc.embed(title + " " + " ".join(extraction.key_concepts))
+        await storage.store_embedding(
+            text=title,
+            vector=vector,
+            metadata={"paper_id": paper_id, "title": title, "authors": ", ".join(authors)},
+            paper_id=paper_id,
+        )
+        await graph.write_paper_node(paper_id, {"title": title, "authors": authors})
+        await graph.write_concept_nodes(paper_id, extraction.key_concepts)
+
+        if trace_obj:
+            trace_obj.update(output=extraction.model_dump(), status="success")
+        return extraction
+
+    except Exception as exc:
+        if trace_obj:
+            trace_obj.update(status="error", error=str(exc))
+        raise
+
+
 async def _enrich(text: str, paper_id: str) -> PaperExtraction:
     """Run LLM enrichment and return a validated PaperExtraction."""
     model = get_model()
