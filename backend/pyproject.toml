@@ -44,8 +44,6 @@ dependencies = [
 prod = [
     "gunicorn>=23.0.0",
 ]
-
-[dependency-groups]
 dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=1.0.0",
