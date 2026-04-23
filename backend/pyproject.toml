@@ -32,9 +32,18 @@ dependencies = [
 
     # Retry
     "tenacity>=8.2.0",
+
+    # Database (Aurora Serverless v2)
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "aiosqlite>=0.21.0",
+    "alembic>=1.13.0",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
+prod = [
+    "gunicorn>=23.0.0",
+]
 dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=1.0.0",
@@ -42,6 +51,9 @@ dev = [
     "ruff>=0.15.0",
     "httpx>=0.28.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
