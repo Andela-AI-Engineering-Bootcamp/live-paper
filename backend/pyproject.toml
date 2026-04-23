@@ -32,6 +32,17 @@ dependencies = [
 
     # Retry
     "tenacity>=8.2.0",
+
+    # Database (Aurora Serverless v2)
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "aiosqlite>=0.21.0",
+    "alembic>=1.13.0",
+]
+
+[project.optional-dependencies]
+prod = [
+    "gunicorn>=23.0.0",
 ]
 
 [dependency-groups]
