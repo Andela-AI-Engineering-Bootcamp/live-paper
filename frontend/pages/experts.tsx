@@ -52,9 +52,9 @@ export default function Experts() {
     async function fetchExperts() {
         setLoading(true);
         try {
-            const res = await fetch(`${API}/experts`);
+            const res = await fetch(`${API}/api/experts`);
             const data = await res.json();
-            //setExperts(data);
+            setExperts(data);
         } catch {
             setError('Failed to load experts.');
         } finally {

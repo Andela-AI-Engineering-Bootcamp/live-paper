@@ -45,9 +45,17 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
+async function postForm<T>(path: string, fields: Record<string, string>): Promise<T> {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([k, v]) => v && fd.append(k, v));
+  const res = await fetch(`${API_URL}${path}`, { method: "POST", body: fd });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
 export const api = {
   ingest: (pdf_url: string) =>
-    post<IngestResponse>("/api/papers/ingest", { pdf_url }),
+    postForm<IngestResponse>("/api/papers/ingest", { pdf_url }),
 
   getJob: (job_id: string) =>
     get<{ job_id: string; status: string; result?: unknown; error?: string }>(
@@ -62,7 +70,7 @@ export const api = {
     affiliation?: string;
     response_text: string;
     source_paper_id: string;
-  }, question: string) =>
+  }) =>
     post("/api/escalation/respond", response),
 
   health: () => get<{ status: string; graph_nodes: number }>("/api/health"),
