@@ -4,7 +4,7 @@
 
 **Andela AI Engineering Bootcamp — Capstone 2025**
 
-Live demo → **https://frontend-ochre-six-78.vercel.app**
+Live demo → **`terraform output frontend_url`** *(available after `terraform apply`)*
 
 ---
 
@@ -120,20 +120,19 @@ Provisions: SQS queues · Aurora Serverless v2 · SageMaker Serverless endpoint 
 Every push to `main` triggers:
 1. Backend pytest (14 tests)
 2. Frontend `tsc --noEmit`
-3. Docker build → push to ECR
-4. Vercel frontend deploy
+3. Docker build → push to ECR → App Runner (backend)
+4. `next build` → S3 sync → CloudFront cache invalidation (frontend)
 5. `/api/health` smoke test
 
 Add these secrets in **GitHub → Settings → Secrets → Actions**:
 
 | Secret | Value |
 |---|---|
-| `AWS_ACCESS_KEY_ID` | IAM user with ECR + App Runner permissions |
+| `AWS_ACCESS_KEY_ID` | IAM user with ECR + App Runner + S3 + CloudFront permissions |
 | `AWS_SECRET_ACCESS_KEY` | — |
-| `VERCEL_TOKEN` | From vercel.com → Settings → Tokens |
-| `VERCEL_ORG_ID` | From `.vercel/project.json` after `vercel link` |
-| `VERCEL_PROJECT_ID` | — |
-| `BACKEND_URL` | App Runner service URL (from `terraform output backend_url`) |
+| `BACKEND_URL` | `terraform output backend_url` |
+| `FRONTEND_BUCKET` | `terraform output frontend_bucket` |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `terraform output cloudfront_distribution_id` |
 
 ---
 

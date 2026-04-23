@@ -39,3 +39,18 @@ output "sagemaker_endpoint_name" {
   description = "SageMaker embedding endpoint name — set as SAGEMAKER_ENDPOINT env var"
   value       = aws_sagemaker_endpoint.embeddings.name
 }
+
+output "frontend_url" {
+  description = "CloudFront URL for the LivePaper frontend"
+  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+}
+
+output "frontend_bucket" {
+  description = "S3 bucket name — upload Next.js export here"
+  value       = aws_s3_bucket.frontend.bucket
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID — needed for cache invalidation after deploy"
+  value       = aws_cloudfront_distribution.frontend.id
+}
