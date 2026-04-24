@@ -1,15 +1,8 @@
-# This is added by Trash-Bin vscode extension
-backend/app/tools/ii.trh
-backend/app/tools/extra.trash
-# This is the end of Trash-Bin vscode extension
-
-<<<<<<< HEAD
-=======
 # Trash-Bin / VS Code soft-delete artifacts (don't commit these)
 *.trh
 *.trash
 **/trash/
->>>>>>> main
+
 # Python
 __pycache__/
 *.py[cod]
@@ -39,6 +32,7 @@ Thumbs.db
 .vscode/
 .idea/
 .claude/
+
 # Terraform working directory (providers, plan cache, local state)
 infra/.terraform/
 infra/*.tfstate
@@ -48,6 +42,7 @@ infra/*.tfplan
 infra/*.tfvars
 infra/*.tfvars.json
 !infra/*.tfvars.example
+
 # Logs
 *.log
 # Test artifacts
