@@ -1,0 +1,255 @@
+"""
+LLM Tool: Register Researcher with Neo4j and Mailjet Integration
+Accepts clerk_id, paper_id, first_name, last_name, title, email, and social media links (comma separated).
+""" 
+import os
+from pathlib import Path
+from typing import Dict, Optional
+from dotenv import load_dotenv # type: ignore
+from neo4j import GraphDatabase # type: ignore
+import mailjet_rest # type: ignore
+ 
+current_file_path = Path(__file__).resolve()
+ 
+env_path = current_file_path.parent.parent.parent / '.env'
+ 
+load_dotenv(dotenv_path=env_path)
+
+class LLMResearcherTool:
+
+    def ask_researchers_question(self, paper_id: str, question: str) -> dict:
+        """
+        Send a question to all researchers attached to a paper by email using an HTML template.
+        Args:
+            paper_id (str): The paper id
+            question (str): The question to send
+        Returns:
+            dict: Result of the operation
+        """
+        # Find all researchers for the paper
+        query = """
+        MATCH (r:Researcher) WHERE r.paper_id = $paper_id RETURN r
+        """
+        with self.driver.session() as session:
+            result = session.run(query, paper_id=paper_id)
+            researchers = [record['r'] for record in result]
+        if not researchers:
+            return {"success": False, "message": "No researchers found for this paper."}
+
+        # Load HTML template
+        template_path = os.path.join(os.path.dirname(__file__), 'email_templates', 'ask_researcher_question.html')
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                html_template = f.read()
+        except Exception as e:
+            html_template = "<p>{{ question }}</p>"
+
+        # Send email to each researcher
+        sent = []
+        failed = []
+        for researcher in researchers:
+            email = researcher.get('email')
+            first_name = researcher.get('first_name', '')
+            subject = f"Question about your paper (ID: {paper_id})"
+            text_part = (
+                f"Hello {first_name},\n\n"
+                f"You have received a question regarding your paper (ID: {paper_id}):\n\n"
+                f"{question}\n\n"
+                "Please reply to this email to help the community.\n\nBest regards,\nLivePaper Team"
+            )
+            html_part = (
+                html_template
+                .replace('{{ first_name }}', first_name)
+                .replace('{{ paper_id }}', paper_id)
+                .replace('{{ question }}', question)
+            )
+            data = {
+                'Messages': [
+                    {
+                        "From": {
+                            "Email": self.sender_email,
+                            "Name": "LivePaper"
+                        },
+                        "To": [
+                            {
+                                "Email": email,
+                                "Name": first_name
+                            }
+                        ],
+                        "Subject": subject,
+                        "TextPart": text_part,
+                        "HTMLPart": html_part
+                    }
+                ]
+            }
+            try:
+                result = self.mailjet.send.create(data=data)
+                sent.append({"email": email, "result": result.json()})
+            except Exception as e:
+                failed.append({"email": email, "error": str(e)})
+        return {"success": True, "sent": sent, "failed": failed}
+ 
+    def __init__(self):
+        # Now these will correctly pull from the file
+        self.sender_email = os.getenv("SENDER_EMAIL")
+        self.uri = os.getenv("NEO4J_URI")
+        self.user = os.getenv("NEO4J_USERNAME")
+        self.password = os.getenv("NEO4J_PASSWORD")
+        
+        # Debug print to confirm it's working
+        print(f"Connecting to: {self.uri}")
+
+        if not self.uri or not self.user or not self.password:
+            raise ValueError(f"Missing Neo4j environment variables at {env_path}")
+        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
+        self.mailjet = mailjet_rest.Client(
+            auth=(os.getenv("MAILJET_API_KEY"), os.getenv("MAILJET_API_SECRET")), 
+            version='v3.1'
+        )
+
+    def close(self):
+        self.driver.close()
+        
+    def get_researcher_info(self, clerk_id: str = None, email: str = None): # type: ignore
+            """
+            Retrieve researcher info and records from Neo4j by clerk_id or email.
+            Args:
+                clerk_id (str, optional): Clerk user id
+                email (str, optional): Email address
+            Returns:
+                dict: Researcher info or error message
+            """
+            if not clerk_id and not email:
+                return {"success": False, "message": "clerk_id or email must be provided."}
+            query = "MATCH (r:Researcher) WHERE "
+            params = {}
+            if clerk_id:
+                query += "r.clerk_id = $clerk_id"
+                params['clerk_id'] = clerk_id
+            if email:
+                if clerk_id:
+                    query += " OR "
+                query += "r.email = $email"
+                params['email'] = email
+            query += " RETURN r"
+            with self.driver.session() as session:  
+                result = session.run(query, **params)
+                records = [record['r'] for record in result]
+                if not records:
+                    return {"success": False, "message": "No researcher found."}
+                # Convert Neo4j Node to dict
+                def node_to_dict(node):
+                    return dict(node)
+                return {"success": True, "data": [node_to_dict(r) for r in records]}
+            
+            
+
+    def register_researcher(self, clerk_id: str, paper_id: str, first_name: str, last_name: str, title: str, email: str, social_media_links: str) -> Dict:
+        # Convert comma-separated string to a Python list
+        social_links = [link.strip() for link in social_media_links.split(',') if link.strip()]
+        
+        with self.driver.session() as session:
+            # We use MERGE for both Researcher and Paper to ensure they exist,
+            # then create a relationship between them.
+            result = session.run(
+                """
+                MERGE (r:Researcher {clerk_id: $clerk_id})
+                SET r.first_name = $first_name,
+                    r.last_name = $last_name,
+                    r.title = $title,
+                    r.email = $email,
+                    r.social_media_links = $social_links
+                
+                // Find or create the paper node
+                MERGE (p:Paper {paper_id: $paper_id})
+                
+                // Create the relationship
+                MERGE (r)-[:EXPERT_ON]->(p)
+                
+                RETURN r, p
+                """,
+                clerk_id=clerk_id,
+                paper_id=paper_id,
+                first_name=first_name,
+                last_name=last_name,
+                title=title,
+                email=email,
+                social_links=social_links # Now passing the actual list
+            )
+            record = result.single()
+            if not record:
+                return {"success": False, "message": "Failed to register researcher in Neo4j."}
+
+        # Send welcome email using the provided title or paper_id
+        email_result = self._send_welcome_email(email, first_name, title, paper_id)
+        return {"success": True, "message": "Researcher registered and linked to paper.", "email_result": email_result}
+    
+    def _send_welcome_email(self, email: str, first_name: str, topic_name: str, topic_id: str) -> Optional[Dict]:
+        subject = f"Welcome to LivePaper: Researcher for '{topic_name}'"
+        text_part = (
+            f"Hello {first_name},\n"
+            f"Welcome to LivePaper! You have been registered as a researcher for the topic: '{topic_name}' (ID: {topic_id}).\n"
+            "You can now contribute your expertise and collaborate with others on this topic.\n\n"
+            "Best regards,\nThe LivePaper Team"
+        )
+        # Load HTML template and replace placeholders
+        template_path = os.path.join(os.path.dirname(__file__), 'email_templates', 'welcome_researcher_email.html')
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                html_template = f.read()
+            html_part = (
+                html_template
+                .replace('{{ first_name }}', first_name)
+                .replace('{{ topic_name }}', topic_name)
+                .replace('{{ topic_id }}', topic_id)
+            )
+        except Exception as e:
+            html_part = f"<p>Welcome, {first_name}! You have been registered as a researcher for {topic_name} (ID: {topic_id}).</p>"
+        data = {
+            'Messages': [
+                {
+                    "From": {
+                        "Email": self.sender_email,
+                        "Name": "LivePaper"
+                    },
+                    "To": [
+                        {
+                            "Email": email,
+                            "Name": first_name
+                        }
+                    ],
+                    "Subject": subject,
+                    "TextPart": text_part,
+                    "HTMLPart": html_part
+                }
+            ]
+        }
+        try:
+            result = self.mailjet.send.create(data=data)
+            print(f"Email sent to {email} with status {result.status_code}")
+            return result.json()
+        except Exception as e:
+            return {"error": str(e)}
+
+
+if __name__ == "__main__":
+    print(f"Connecting to: {os.getenv('NEO4J_URI')}") # Verify this isn't None or localhost
+    tool = LLMResearcherTool()
+    try:
+        # result = tool.register_researcher(
+        #     clerk_id="clerk123",
+        #     paper_id="paper456",
+        #     first_name="Alice",
+        #     last_name="Smith",
+        #     title="Dr.",
+        #     email="samwhitedove@gmail.com",
+        #     social_media_links="https://twitter.com/alice, https://linkedin.com/in/alice"
+        # )
+        # print(result)
+        
+        # get_result = tool.get_researcher_info(clerk_id="clerk123")
+        # print(get_result)
+        ask = tool.ask_researchers_question(paper_id="paper456", question="What are the key findings of your research?")
+        print(ask)
+    finally:        
+        tool.close()

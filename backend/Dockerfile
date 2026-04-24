@@ -18,8 +18,8 @@ COPY alembic/ alembic/
 COPY alembic.ini .
 
 # Non-root user
-RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
-USER appuser
+# RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
+# USER appuser
 
 EXPOSE 8000
 

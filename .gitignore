@@ -1,3 +1,8 @@
+# This is added by Trash-Bin vscode extension
+backend/app/tools/ii.trh
+backend/app/tools/extra.trash
+# This is the end of Trash-Bin vscode extension
+
 # Python
 __pycache__/
 *.py[cod]
@@ -6,26 +11,21 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 dist/
-
 # uv
 uv.lock
-
 # Environment — never commit real secrets
 .env
 .env.local
 .env.production
 backend/.env
-
 # Next.js
 frontend/.next/
 frontend/out/
 frontend/node_modules/
 frontend/.env.local
-
 # OS
 .DS_Store
 Thumbs.db
-
 # IDE
 .cursor/
 .vscode/
@@ -40,7 +40,6 @@ infra/*.tfplan
 
 # Logs
 *.log
-
 # Test artifacts
 .pytest_cache/
 htmlcov/
