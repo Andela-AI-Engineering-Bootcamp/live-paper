@@ -6,14 +6,28 @@ import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import {
     BookOpen, Plus, Trash2, Pencil, X, ExternalLink,
-    FileText, Users, ChevronRight, AlertCircle, Loader2
+    FileText, Users, ChevronRight, AlertCircle, Loader2, UserPlus
 } from 'lucide-react';
 import Footer from '../components/Footer';
+import AdminNav from '@/components/AdminNav';
+
+interface Author {
+    name: string;
+    email: string;
+}
 
 interface Paper {
     id: string;
     title: string;
-    authors: string;
+    authors: Author[];
+    abstract: string;
+    paper_url: string;
+    pdf_file: string;
+}
+
+interface PaperForm {
+    title: string;
+    authors: Author[];
     abstract: string;
     paper_url: string;
     pdf_file: string;
@@ -21,7 +35,14 @@ interface Paper {
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const emptyForm = { title: '', authors: '', abstract: '', paper_url: '', pdf_file: '' };
+const emptyAuthor: Author = { name: '', email: '' };
+const emptyForm: PaperForm = {
+    title: '',
+    authors: [{ ...emptyAuthor }],
+    abstract: '',
+    paper_url: '',
+    pdf_file: '',
+};
 
 export default function AdminDashboard() {
     const { user, isLoaded } = useUser();
@@ -31,7 +52,7 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
-    const [form, setForm] = useState(emptyForm);
+    const [form, setForm] = useState<PaperForm>(emptyForm);
     const [submitting, setSubmitting] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [error, setError] = useState('');
@@ -52,7 +73,7 @@ export default function AdminDashboard() {
         try {
             const res = await fetch(`${API}/papers`);
             const data = await res.json();
-            //setPapers(data);
+            setPapers(data);
         } catch {
             setError('Failed to load papers.');
         } finally {
@@ -62,7 +83,7 @@ export default function AdminDashboard() {
 
     function openAdd() {
         setEditingPaper(null);
-        setForm(emptyForm);
+        setForm({ ...emptyForm, authors: [{ ...emptyAuthor }] });
         setModalOpen(true);
     }
 
@@ -70,7 +91,9 @@ export default function AdminDashboard() {
         setEditingPaper(paper);
         setForm({
             title: paper.title,
-            authors: paper.authors,
+            authors: paper.authors?.length
+                ? paper.authors.map(a => ({ ...a }))
+                : [{ ...emptyAuthor }],
             abstract: paper.abstract,
             paper_url: paper.paper_url,
             pdf_file: paper.pdf_file,
@@ -81,24 +104,55 @@ export default function AdminDashboard() {
     function closeModal() {
         setModalOpen(false);
         setEditingPaper(null);
-        setForm(emptyForm);
+        setForm({ ...emptyForm, authors: [{ ...emptyAuthor }] });
     }
+
+    // ── Author helpers ────────────────────────────────────────────────────────
+
+    function addAuthor() {
+        setForm(prev => ({
+            ...prev,
+            authors: [...prev.authors, { ...emptyAuthor }],
+        }));
+    }
+
+    function removeAuthor(index: number) {
+        setForm(prev => ({
+            ...prev,
+            authors: prev.authors.filter((_, i) => i !== index),
+        }));
+    }
+
+    function updateAuthor(index: number, field: keyof Author, value: string) {
+        setForm(prev => {
+            const updated = [...prev.authors];
+            updated[index] = { ...updated[index], [field]: value };
+            return { ...prev, authors: updated };
+        });
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setSubmitting(true);
         try {
+            const payload = {
+                ...form,
+                authors: form.authors.filter(a => a.name.trim()),
+            };
+
             if (editingPaper) {
                 await fetch(`${API}/papers/${editingPaper.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(form),
+                    body: JSON.stringify(payload),
                 });
             } else {
                 await fetch(`${API}/papers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(form),
+                    body: JSON.stringify(payload),
                 });
             }
             await fetchPapers();
@@ -122,6 +176,12 @@ export default function AdminDashboard() {
         }
     }
 
+    // ── Display helper: render authors list ───────────────────────────────────
+    function renderAuthors(authors: Author[]) {
+        if (!authors?.length) return '—';
+        return authors.map(a => a.name).filter(Boolean).join(', ');
+    }
+
     if (!isLoaded) return null;
 
     return (
@@ -137,21 +197,8 @@ export default function AdminDashboard() {
                     </div>
                     <span className="text-[15px] font-semibold tracking-tight">LivePaper</span>
                 </Link>
-                <nav className="flex items-center gap-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
-                    <Link
-                        href="/dashboard"
-                        className="text-sm font-semibold text-[#6b1f2a] border-b border-[#6b1f2a] pb-0.5"
-                    >
-                        Papers
-                    </Link>
-                    <Link
-                        href="/experts"
-                        className="text-sm text-[#8a7060] hover:text-[#2c2217] transition-colors flex items-center gap-1"
-                    >
-                        <Users className="w-3.5 h-3.5" /> Experts
-                    </Link>
-                    <UserButton showName={true} />
-                </nav>
+                <AdminNav />
+                <UserButton showName={true} />
             </header>
 
             {/* Main */}
@@ -169,7 +216,7 @@ export default function AdminDashboard() {
                     </div>
                     <button
                         onClick={openAdd}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#6b1f2a] text-white text-sm font-semibold hover:bg-[#b8860b] active:scale-95 transition-all duration-150 shadow-sm"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#6b1f2a] text-white text-sm font-semibold hover:bg-[#4e1520] active:scale-95 transition-all duration-150 shadow-sm"
                         style={{ fontFamily: 'system-ui, sans-serif' }}
                     >
                         <Plus className="w-4 h-4" /> Add Paper
@@ -219,7 +266,19 @@ export default function AdminDashboard() {
                                             </p>
                                         </td>
                                         <td className="px-5 py-4 text-[#5a4535] hidden md:table-cell max-w-[160px]">
-                                            <p className="line-clamp-2">{paper.authors}</p>
+                                            <div className="space-y-0.5">
+                                                {paper.authors?.slice(0, 2).map((a, idx) => (
+                                                    <p key={idx} className="text-xs leading-snug">
+                                                        {a.name}
+                                                        {a.email && (
+                                                            <span className="text-[#8a7060] ml-1">·{a.email}</span>
+                                                        )}
+                                                    </p>
+                                                ))}
+                                                {paper.authors?.length > 2 && (
+                                                    <p className="text-xs text-[#8a7060]">+{paper.authors.length - 2} more</p>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-5 py-4 text-[#8a7060] hidden lg:table-cell max-w-[260px]">
                                             <p className="line-clamp-2 text-xs leading-relaxed">{paper.abstract}</p>
@@ -305,29 +364,93 @@ export default function AdminDashboard() {
                         </div>
 
                         {/* Form */}
-                        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-                            {[
-                                { label: 'Title', key: 'title', placeholder: 'Full paper title', required: true },
-                                { label: 'Authors', key: 'authors', placeholder: 'e.g. Smith, J., Doe, A.', required: true },
-                                { label: 'Paper URL', key: 'paper_url', placeholder: 'https://…', required: false },
-                                { label: 'PDF File URL', key: 'pdf_file', placeholder: 'https://…/paper.pdf', required: false },
-                            ].map(({ label, key, placeholder, required }) => (
-                                <div key={key}>
-                                    <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">
-                                        {label} {required && <span className="text-[#6b1f2a]">*</span>}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={form[key as keyof typeof form]}
-                                        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-                                        placeholder={placeholder}
-                                        required={required}
-                                        className="w-full px-4 py-2.5 rounded-lg border border-[#d4c8bc] bg-white text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
-                                    />
-                                </div>
-                            ))}
+                        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
 
-                            {/* Abstract textarea */}
+                            {/* Title */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">
+                                    Title <span className="text-[#6b1f2a]">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={form.title}
+                                    onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+                                    placeholder="Full paper title"
+                                    required
+                                    className="w-full px-4 py-2.5 rounded-lg border border-[#d4c8bc] bg-white text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
+                                />
+                            </div>
+
+                            {/* Authors — nested dynamic list */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-semibold text-[#5a4535] uppercase tracking-wider">
+                                        Authors <span className="text-[#6b1f2a]">*</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={addAuthor}
+                                        className="inline-flex items-center gap-1 text-xs text-[#6b1f2a] font-medium hover:text-[#4e1520] transition-colors"
+                                    >
+                                        <UserPlus className="w-3.5 h-3.5" /> Add Author
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {form.authors.map((author, index) => (
+                                        <div
+                                            key={index}
+                                            className="flex gap-2 items-start bg-white border border-[#e0d8cf] rounded-xl p-3"
+                                        >
+                                            {/* Author number */}
+                                            <div className="w-5 h-5 rounded-full bg-[#6b1f2a] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-2">
+                                                {index + 1}
+                                            </div>
+
+                                            {/* Fields */}
+                                            <div className="flex-1 space-y-2">
+                                                <input
+                                                    type="text"
+                                                    value={author.name}
+                                                    onChange={e => updateAuthor(index, 'name', e.target.value)}
+                                                    placeholder="Author name"
+                                                    required={index === 0}
+                                                    className="w-full px-3 py-2 rounded-lg border border-[#d4c8bc] bg-[#faf7f4] text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
+                                                />
+                                                <input
+                                                    type="email"
+                                                    value={author.email}
+                                                    onChange={e => updateAuthor(index, 'email', e.target.value)}
+                                                    placeholder="author@email.com (optional)"
+                                                    className="w-full px-3 py-2 rounded-lg border border-[#d4c8bc] bg-[#faf7f4] text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
+                                                />
+                                            </div>
+
+                                            {/* Remove button — hide if only one author */}
+                                            {form.authors.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeAuthor(index)}
+                                                    className="text-[#b0a090] hover:text-red-500 transition-colors mt-2 shrink-0"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Add author shortcut at the bottom */}
+                                <button
+                                    type="button"
+                                    onClick={addAuthor}
+                                    className="mt-2 w-full py-2 rounded-lg border border-dashed border-[#d4c8bc] text-xs text-[#8a7060] hover:border-[#6b1f2a] hover:text-[#6b1f2a] transition-all duration-150 flex items-center justify-center gap-1.5"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Add another author
+                                </button>
+                            </div>
+
+                            {/* Abstract */}
                             <div>
                                 <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">
                                     Abstract <span className="text-[#6b1f2a]">*</span>
@@ -342,6 +465,25 @@ export default function AdminDashboard() {
                                 />
                             </div>
 
+                            {/* URLs */}
+                            {[
+                                { label: 'Paper URL', key: 'paper_url', placeholder: 'https://…' },
+                                { label: 'PDF File URL', key: 'pdf_file', placeholder: 'https://…/paper.pdf' },
+                            ].map(({ label, key, placeholder }) => (
+                                <div key={key}>
+                                    <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">
+                                        {label}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={form[key as keyof PaperForm] as string}
+                                        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder={placeholder}
+                                        className="w-full px-4 py-2.5 rounded-lg border border-[#d4c8bc] bg-white text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
+                                    />
+                                </div>
+                            ))}
+
                             {/* Actions */}
                             <div className="flex gap-3 pt-2">
                                 <button
@@ -354,7 +496,7 @@ export default function AdminDashboard() {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="flex-1 px-4 py-2.5 rounded-lg bg-[#6b1f2a] text-white text-sm font-semibold hover:bg-[#b8860b] active:scale-95 transition-all duration-150 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                                    className="flex-1 px-4 py-2.5 rounded-lg bg-[#6b1f2a] text-white text-sm font-semibold hover:bg-[#4e1520] active:scale-95 transition-all duration-150 disabled:opacity-50 inline-flex items-center justify-center gap-2"
                                 >
                                     {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                                     {editingPaper ? 'Update Paper' : 'Add Paper'}
