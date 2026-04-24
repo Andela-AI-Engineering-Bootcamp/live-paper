@@ -36,17 +36,9 @@ export default function Chat() {
                                 <span className="text-[15px] font-semibold text-[#2c2217] tracking-tight">LivePaper</span>
                             </Link>
 
-                            {isAdmin && (
-                                <AdminNav />
-                            )}
-                        <UserButton showName={true} />
-
-                                                    
+                            { isAdmin ? <AdminNav /> : <UserButton showName={true} />}
+                          
                         
-                        
-                            <div className="z-10">
-                                <UserButton showName={true} />
-                            </div>
                         </header>
 
                         {/* Paywall content */}
@@ -110,10 +102,7 @@ export default function Chat() {
                         <span className="text-[15px] font-semibold text-[#2c2217] tracking-tight">LivePaper</span>
                     </Link>
 
-                        {isAdmin && (
-                            <AdminNav />
-                        )}
-                        <UserButton showName={true} />
+                        { isAdmin ? <AdminNav /> : <UserButton showName={true} />}
 
             
                 </header>

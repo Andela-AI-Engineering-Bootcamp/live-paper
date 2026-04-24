@@ -103,7 +103,7 @@ export default function ExpertResponse() {
                         style={{ fontFamily: 'system-ui, sans-serif' }}
                     >
                         <div className="w-1.5 h-1.5 rounded-full bg-[#6b1f2a] opacity-80" />
-                        Expert Portal
+                        Expert Response
                     </div>
                 </header>
 
