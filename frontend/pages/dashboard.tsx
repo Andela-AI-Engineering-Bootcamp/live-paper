@@ -321,7 +321,7 @@ export default function AdminDashboard() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {papers.map((paper, i) => (
+                                {papers?.map((paper, i) => (
                                     <tr
                                         key={paper.id}
                                         className={`border-b border-[#f0e8e0] hover:bg-[#faf7f4] transition-colors ${i === papers.length - 1 ? 'border-0' : ''}`}

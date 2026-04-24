@@ -25,7 +25,7 @@ type PageState = 'loading' | 'ready' | 'submitting' | 'success' | 'error';
 
 export default function ExpertResponse() {
     const router = useRouter();
-    const { paper_id, expert_email } = router.query;
+    const { paper_id, expert_email, question_id } = router.query;
 
     const [paper, setPaper] = useState<Paper | null>(null);
     const [response, setResponse] = useState('');
@@ -61,13 +61,19 @@ export default function ExpertResponse() {
         setSubmitError('');
 
         try {
+<<<<<<< HEAD
+            const res = await fetch(`${API}/api/paper/answer-question`, {
+=======
             const res = await fetch(`${API}/api/expert-responses`, {
+>>>>>>> main
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     paper_id,
-                    expert_email,
-                    response: response.trim(),
+                    email: expert_email,
+                    question_id,
+                    summary: paper.abstract,
+                    answer: response.trim(),
                 }),
             });
 

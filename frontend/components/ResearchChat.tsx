@@ -1,7 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, BookOpen, Square } from 'lucide-react';
-import Link from 'next/link';
 
 interface Message {
     id: string;
