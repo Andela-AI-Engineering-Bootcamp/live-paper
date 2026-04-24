@@ -34,6 +34,7 @@ async def store_embedding(
         client = boto3.client("s3vectors", region_name=os.getenv("AWS_REGION", "us-east-1"))
         client.put_vectors(
             vectorBucketName=bucket,
+            indexName=os.getenv("VECTOR_INDEX", "papers"),
             vectors=[{
                 "key": vector_id,
                 "data": {"float32": vector},
@@ -63,6 +64,7 @@ async def query_similar(
         client = boto3.client("s3vectors", region_name=os.getenv("AWS_REGION", "us-east-1"))
         response = client.query_vectors(
             vectorBucketName=bucket,
+            indexName=os.getenv("VECTOR_INDEX", "papers"),
             queryVector={"float32": vector},
             topK=top_k,
             returnMetadata=True,

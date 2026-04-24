@@ -22,7 +22,7 @@ interface Paper {
     authors: Author[];
     abstract: string;
     paper_url: string;
-    pdf_file: string;
+    pdf_url: string;
 }
 
 interface PaperForm {
@@ -30,7 +30,7 @@ interface PaperForm {
     authors: Author[];
     abstract: string;
     paper_url: string;
-    pdf_file: string;
+    pdf_url: string;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -41,7 +41,7 @@ const emptyForm: PaperForm = {
     authors: [{ ...emptyAuthor }],
     abstract: '',
     paper_url: '',
-    pdf_file: '',
+    pdf_url: '',
 };
 
 export default function AdminDashboard() {
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
     async function fetchPapers() {
         setLoading(true);
         try {
-            const res = await fetch(`${API}/papers`);
+            const res = await fetch(`${API}/api/papers`);
             const data = await res.json();
             setPapers(data);
         } catch {
@@ -96,7 +96,7 @@ export default function AdminDashboard() {
                 : [{ ...emptyAuthor }],
             abstract: paper.abstract,
             paper_url: paper.paper_url,
-            pdf_file: paper.pdf_file,
+            pdf_url: paper.pdf_url,
         });
         setModalOpen(true);
     }
@@ -143,13 +143,13 @@ export default function AdminDashboard() {
             };
 
             if (editingPaper) {
-                await fetch(`${API}/papers/${editingPaper.id}`, {
+                await fetch(`${API}/api/papers/${editingPaper.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
             } else {
-                await fetch(`${API}/papers`, {
+                await fetch(`${API}/api/papers/ingest`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
@@ -167,7 +167,7 @@ export default function AdminDashboard() {
     async function handleDelete(id: string) {
         setDeleteId(id);
         try {
-            await fetch(`${API}/papers/${id}`, { method: 'DELETE' });
+            await fetch(`${API}/api/papers/${id}`, { method: 'DELETE' });
             setPapers(prev => prev.filter(p => p.id !== id));
         } catch {
             setError('Failed to delete paper.');
@@ -285,8 +285,8 @@ export default function AdminDashboard() {
                                                         <ExternalLink className="w-3 h-3" /> URL
                                                     </a>
                                                 )}
-                                                {paper.pdf_file && (
-                                                    <a href={paper.pdf_file} target="_blank" rel="noopener noreferrer"
+                                                {paper.pdf_url && (
+                                                    <a href={paper.pdf_url} target="_blank" rel="noopener noreferrer"
                                                         className="inline-flex items-center gap-1 text-xs text-[#6b1f2a] hover:underline">
                                                         <FileText className="w-3 h-3" /> PDF
                                                     </a>
@@ -462,7 +462,7 @@ export default function AdminDashboard() {
                             {/* URLs */}
                             {[
                                 { label: 'Paper URL', key: 'paper_url', placeholder: 'https://…' },
-                                { label: 'PDF File URL', key: 'pdf_file', placeholder: 'https://…/paper.pdf' },
+                                { label: 'PDF File URL', key: 'pdf_url', placeholder: 'https://…/paper.pdf' },
                             ].map(({ label, key, placeholder }) => (
                                 <div key={key}>
                                     <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">

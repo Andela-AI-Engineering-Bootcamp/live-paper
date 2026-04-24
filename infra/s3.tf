@@ -1,17 +1,11 @@
 # ── S3 Vector Bucket ──────────────────────────────────────────────────────────
-# AWS S3 Vectors stores 384-dim all-MiniLM embeddings.
-# One index: "papers" — stores paper chunk embeddings + metadata.
+# Created manually via CLI — Terraform AWS provider does not yet support
+# aws_s3vectors_vector_bucket. Bucket name: livepaper-vectors, index: papers.
+# ARN: arn:aws:s3vectors:us-east-1:375510692572:bucket/livepaper-vectors
 
-resource "aws_s3vectors_vector_bucket" "papers" {
+locals {
   vector_bucket_name = "${var.app_name}-vectors"
-}
-
-resource "aws_s3vectors_index" "papers" {
-  vector_bucket_name = aws_s3vectors_vector_bucket.papers.vector_bucket_name
-  index_name         = "papers"
-  data_type          = "float32"
-  dimension          = 384  # all-MiniLM-L6-v2 output dimension
-  distance_metric    = "cosine"
+  vector_bucket_arn  = "arn:aws:s3vectors:${var.aws_region}:${data.aws_caller_identity.current.account_id}:bucket/${var.app_name}-vectors"
 }
 
 # ── IAM — allow App Runner task role to read/write vectors ────────────────────
@@ -25,8 +19,8 @@ data "aws_iam_policy_document" "s3vectors_access" {
       "s3vectors:DeleteVectors",
     ]
     resources = [
-      aws_s3vectors_vector_bucket.papers.arn,
-      "${aws_s3vectors_vector_bucket.papers.arn}/*",
+      local.vector_bucket_arn,
+      "${local.vector_bucket_arn}/*",
     ]
   }
 }

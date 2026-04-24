@@ -41,7 +41,7 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   default_root_object = "index.html"
-  price_class         = "PriceClass_100"  # US + Europe only — cheapest tier
+  price_class         = "PriceClass_100" # US + Europe only — cheapest tier
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -68,9 +68,9 @@ resource "aws_cloudfront_distribution" "frontend" {
 
   # SPA fallback — route 404s back to index.html so Next.js handles routing
   custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
   }
 
   restrictions {

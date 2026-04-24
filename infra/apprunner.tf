@@ -106,8 +106,15 @@ resource "aws_iam_role_policy_attachment" "task_papers_raw" {
 
 data "aws_iam_policy_document" "bedrock_invoke" {
   statement {
-    actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-    resources = ["arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0"]
+    actions = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+    resources = [
+      "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:inference-profile/us.amazon.nova-pro-v1:0",
+      "arn:aws:bedrock:us-east-2:${data.aws_caller_identity.current.account_id}:inference-profile/us.amazon.nova-pro-v1:0",
+      "arn:aws:bedrock:us-west-2:${data.aws_caller_identity.current.account_id}:inference-profile/us.amazon.nova-pro-v1:0",
+      "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0",
+      "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-pro-v1:0",
+      "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0",
+    ]
   }
 }
 
@@ -136,28 +143,32 @@ resource "aws_apprunner_service" "backend" {
       image_configuration {
         port = "8000"
         runtime_environment_variables = {
-          DEBUG                  = "false"
-          AWS_REGION             = var.aws_region
-          AURORA_CLUSTER_ARN     = aws_rds_cluster.aurora.arn
-          AURORA_HOST            = aws_rds_cluster.aurora.endpoint
-          AURORA_DATABASE        = var.aurora_db_name
-          AURORA_USERNAME        = var.aurora_username
-          VECTOR_BUCKET          = aws_s3vectors_vector_bucket.papers.vector_bucket_name
-          SAGEMAKER_ENDPOINT     = aws_sagemaker_endpoint.embeddings.name
+          DEBUG                    = "false"
+          AWS_REGION               = var.aws_region
+          CORS_ORIGINS             = "https://${aws_cloudfront_distribution.frontend.domain_name},http://localhost:3000"
+          FRONTEND_URL             = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+          AURORA_CLUSTER_ARN       = aws_rds_cluster.aurora.arn
+          AURORA_HOST              = aws_rds_cluster.aurora.endpoint
+          AURORA_PORT              = "5432"
+          AURORA_DATABASE          = var.aurora_db_name
+          AURORA_USERNAME          = var.aurora_username
+          VECTOR_BUCKET            = local.vector_bucket_name
+          VECTOR_INDEX             = "papers"
+          SAGEMAKER_ENDPOINT       = "alex-embedding-endpoint"
           SQS_INGESTION_QUEUE_URL  = aws_sqs_queue.ingestion.url
           SQS_ESCALATION_QUEUE_URL = aws_sqs_queue.escalation.url
-          BEDROCK_MODEL_ID       = "us.amazon.nova-pro-v1:0"
-          BEDROCK_REGION         = "us-west-2"
-          NEO4J_URI              = var.neo4j_uri
-          NEO4J_USERNAME         = var.neo4j_username
-          PAPERS_RAW_BUCKET      = aws_s3_bucket.papers_raw.bucket
+          BEDROCK_MODEL_ID         = "us.amazon.nova-pro-v1:0"
+          BEDROCK_REGION           = "us-west-2"
+          NEO4J_URI                = var.neo4j_uri
+          NEO4J_USERNAME           = var.neo4j_username
+          PAPERS_RAW_BUCKET        = aws_s3_bucket.papers_raw.bucket
         }
         runtime_environment_secrets = {
-          AURORA_PASSWORD      = aws_rds_cluster.aurora.master_user_secret[0].secret_arn
-          OPENAI_API_KEY       = aws_secretsmanager_secret.openai.arn
-          LANGFUSE_PUBLIC_KEY  = aws_secretsmanager_secret.langfuse_public.arn
-          LANGFUSE_SECRET_KEY  = aws_secretsmanager_secret.langfuse_secret.arn
-          NEO4J_PASSWORD       = aws_secretsmanager_secret.neo4j_password.arn
+          AURORA_PASSWORD     = aws_rds_cluster.aurora.master_user_secret[0].secret_arn
+          OPENAI_API_KEY      = aws_secretsmanager_secret.openai.arn
+          LANGFUSE_PUBLIC_KEY = aws_secretsmanager_secret.langfuse_public.arn
+          LANGFUSE_SECRET_KEY = aws_secretsmanager_secret.langfuse_secret.arn
+          NEO4J_PASSWORD      = aws_secretsmanager_secret.neo4j_password.arn
         }
       }
     }
@@ -165,19 +176,19 @@ resource "aws_apprunner_service" "backend" {
   }
 
   instance_configuration {
-    cpu    = "1 vCPU"
-    memory = "2 GB"
+    cpu               = "1 vCPU"
+    memory            = "2 GB"
     instance_role_arn = aws_iam_role.apprunner_task.arn
   }
 
   network_configuration {
     egress_configuration {
-      egress_type       = "VPC"
-      vpc_connector_arn = aws_apprunner_vpc_connector.backend.arn
+      egress_type = "DEFAULT"
     }
   }
 
   health_check_configuration {
+    protocol            = "HTTP"
     path                = "/api/health"
     interval            = 10
     timeout             = 5
@@ -194,7 +205,13 @@ resource "aws_secretsmanager_secret" "openai" {
 
 resource "aws_secretsmanager_secret_version" "openai" {
   secret_id     = aws_secretsmanager_secret.openai.id
-  secret_string = var.openai_api_key
+  secret_string = var.openai_api_key != "" ? var.openai_api_key : "set-via-aws-cli"
+
+  # Bootstrap only — rotate via `aws secretsmanager put-secret-value` so we don't
+  # have to pass keys on every apply.
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_secretsmanager_secret" "langfuse_public" {
@@ -203,7 +220,11 @@ resource "aws_secretsmanager_secret" "langfuse_public" {
 
 resource "aws_secretsmanager_secret_version" "langfuse_public" {
   secret_id     = aws_secretsmanager_secret.langfuse_public.id
-  secret_string = var.langfuse_public_key
+  secret_string = var.langfuse_public_key != "" ? var.langfuse_public_key : "set-via-aws-cli"
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_secretsmanager_secret" "langfuse_secret" {
@@ -212,7 +233,11 @@ resource "aws_secretsmanager_secret" "langfuse_secret" {
 
 resource "aws_secretsmanager_secret_version" "langfuse_secret" {
   secret_id     = aws_secretsmanager_secret.langfuse_secret.id
-  secret_string = var.langfuse_secret_key
+  secret_string = var.langfuse_secret_key != "" ? var.langfuse_secret_key : "set-via-aws-cli"
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_secretsmanager_secret" "neo4j_password" {
@@ -221,5 +246,9 @@ resource "aws_secretsmanager_secret" "neo4j_password" {
 
 resource "aws_secretsmanager_secret_version" "neo4j_password" {
   secret_id     = aws_secretsmanager_secret.neo4j_password.id
-  secret_string = var.neo4j_password
+  secret_string = var.neo4j_password != "" ? var.neo4j_password : "placeholder"
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }

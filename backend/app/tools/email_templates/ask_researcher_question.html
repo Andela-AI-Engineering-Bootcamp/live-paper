@@ -1,0 +1,93 @@
+<!-- Ask Researcher Question Email Template for LivePaper -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question about your paper</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f7f9fb;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+        .container {
+            max-width: 520px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(42, 122, 226, 0.08);
+            padding: 36px 32px 28px 32px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .app-title {
+            font-size: 2.1em;
+            font-weight: 700;
+            color: #2a7ae2;
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            font-size: 1.1em;
+            color: #555;
+            margin-bottom: 18px;
+        }
+        .content {
+            font-size: 1.08em;
+            margin-bottom: 18px;
+        }
+        .question {
+            background: #eaf3fc;
+            border-left: 4px solid #2a7ae2;
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin: 18px 0 12px 0;
+            font-size: 1.08em;
+            color: #2a7ae2;
+            font-style: italic;
+        }
+        .footer {
+            font-size: 0.97em;
+            color: #888;
+            text-align: center;
+            margin-top: 32px;
+        }
+        .divider {
+            border: none;
+            border-top: 1px solid #e3e8ee;
+            margin: 28px 0 18px 0;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 18px 6vw 18px 6vw;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="app-title">LivePaper</div>
+            <div class="subtitle">Turning static research into live conversations</div>
+        </div>
+        <div class="content">
+            <h2 style="color:#2a7ae2; margin-bottom: 8px;">Hi, {{ first_name }}!</h2>
+            <p>You have received a question regarding your paper (ID: <b>{{ paper_id }}</b>):</p>
+            <div class="question">
+                {{ question }}
+            </div>
+            <p>Please reply to this email to help the community.</p>
+        </div>
+        <hr class="divider">
+        <div class="footer">
+            Best regards,<br>
+            <b>The LivePaper Team</b>
+        </div>
+    </div>
+</body>
+</html>
