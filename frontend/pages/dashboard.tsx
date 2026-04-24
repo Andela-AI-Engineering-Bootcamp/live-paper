@@ -176,12 +176,6 @@ export default function AdminDashboard() {
         }
     }
 
-    // ── Display helper: render authors list ───────────────────────────────────
-    function renderAuthors(authors: Author[]) {
-        if (!authors?.length) return '—';
-        return authors.map(a => a.name).filter(Boolean).join(', ');
-    }
-
     if (!isLoaded) return null;
 
     return (
