@@ -147,11 +147,32 @@ resource "aws_apprunner_service" "backend" {
           AWS_REGION               = var.aws_region
           CORS_ORIGINS             = "https://${aws_cloudfront_distribution.frontend.domain_name},http://localhost:3000"
           FRONTEND_URL             = "https://${aws_cloudfront_distribution.frontend.domain_name}"
-          AURORA_CLUSTER_ARN       = aws_rds_cluster.aurora.arn
+          # TEMPORARY — Aurora is unreachable from App Runner DEFAULT egress:
+          # AWS does not publish App Runner egress CIDRs in ip-ranges.json, so
+          # `data.aws_ip_ranges.apprunner.cidr_blocks` is empty and the Aurora
+          # SG never gets a valid public ingress rule. Switching to the VPC
+          # connector would require a NAT Gateway (~$32/mo) for SageMaker /
+          # Bedrock / OpenAI / Neo4j Aura / Langfuse internet egress.
+          #
+          # Empty AURORA_CLUSTER_ARN triggers the SQLite-in-memory fallback
+          # in app/services/database.py:_build_url and skips `alembic upgrade
+          # head` in the Dockerfile CMD. The cluster + secrets stay
+          # provisioned so re-enabling is a one-line change once we build
+          # out NAT + private subnets in a follow-up PR.
+          AURORA_CLUSTER_ARN       = ""
+          # AURORA_CLUSTER_ARN       = aws_rds_cluster.aurora.arn
           AURORA_HOST              = aws_rds_cluster.aurora.endpoint
           AURORA_PORT              = "5432"
           AURORA_DATABASE          = var.aurora_db_name
           AURORA_USERNAME          = var.aurora_username
+
+          # Demo-rescue companion to the empty AURORA_CLUSTER_ARN above:
+          # ensures both uvicorn workers in the container share one SQLite
+          # file. Without this, each worker would hold its own ":memory:"
+          # database and ingest jobs created by one worker would 404 when
+          # polled via the other. Container ephemeral storage is fine —
+          # state already disappears on every redeploy in this mode.
+          SQLITE_PATH              = "/tmp/livepaper.db"
           VECTOR_BUCKET            = local.vector_bucket_name
           VECTOR_INDEX             = "papers"
           SAGEMAKER_ENDPOINT       = "alex-embedding-endpoint"
