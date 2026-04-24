@@ -79,3 +79,22 @@ variable "openai_api_key" {
   sensitive   = true
   default     = ""
 }
+
+variable "neo4j_uri" {
+  description = "Neo4J Aura connection URI (leave empty to skip graph writes)"
+  type        = string
+  default     = ""
+}
+
+variable "neo4j_username" {
+  description = "Neo4J username"
+  type        = string
+  default     = "neo4j"
+}
+
+variable "neo4j_password" {
+  description = "Neo4J password (stored in Secrets Manager)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
