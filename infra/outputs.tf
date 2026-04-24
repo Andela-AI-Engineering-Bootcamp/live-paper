@@ -32,12 +32,12 @@ output "sqs_escalation_url" {
 
 output "vector_bucket_name" {
   description = "S3 Vectors bucket name"
-  value       = aws_s3vectors_vector_bucket.papers.vector_bucket_name
+  value       = local.vector_bucket_name
 }
 
 output "sagemaker_endpoint_name" {
-  description = "SageMaker embedding endpoint name — set as SAGEMAKER_ENDPOINT env var"
-  value       = aws_sagemaker_endpoint.embeddings.name
+  description = "SageMaker embedding endpoint name (not provisioned — backend uses local sentence-transformers)"
+  value       = "${var.app_name}-embedding-endpoint"
 }
 
 output "frontend_url" {
