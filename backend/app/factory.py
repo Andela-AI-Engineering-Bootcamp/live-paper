@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import chat, escalation, expert_responses, experts, health, papers, search
 from app.services.database import init_db
+from expert_tools import api
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(experts.router, prefix=prefix)
     app.include_router(expert_responses.router, prefix=prefix)
     app.include_router(chat.router)  # /chat (no /api prefix — matches frontend)
+    app.include_router(api.router, prefix=prefix)
 
     @app.get("/")
     async def root() -> dict:
