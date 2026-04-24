@@ -239,12 +239,6 @@ Set `NEXT_PUBLIC_API_URL` in the frontend `.env.local` to point to the right bac
 | `POST` | `/api/expert-responses` | Submit a paper-level expert review — `{ paper_id, expert_email, response, expert_name? }`. Embeds the response, writes it to S3 Vectors + Neo4j, and persists to Aurora. |
 | `POST` | `/api/escalation/respond` | (Legacy escalation flow) Submit an expert response to a specific question |
 | `GET` | `/api/health` | Health check — returns `{ status, graph_nodes }` |
-expert
-| `POST` | `/api/assessment/start` | Health check — returns `{ name, email, paper_id, organization, affiliation, title, summary }` |
-| `POST` | `/api/assessment/submit` | Health check — returns `{ assessment_id, user_answers, summary }` |
-| `POST` | `/api/assessment/start` | Health check — returns `{ assessment_id, user_answers, summary }` |
-| `POST` | `/api/paper/ask-question` | Health check — returns `{ paper_id, summary, question }` |
-| `POST` | `/api/paper/ask-question` | Health check — returns `{ question_id, summary, question, answer }` |
 
 Interactive docs available at `/docs` in debug mode.
 
