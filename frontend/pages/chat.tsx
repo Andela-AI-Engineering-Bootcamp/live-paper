@@ -6,6 +6,7 @@ import {
 import Footer from '../components/Footer';
 import ResearchChat from '../components/ResearchChat';
 import Link from 'next/link';
+import AdminNav from '@/components/AdminNav';
 
 export default function Chat() {
     const { isLoaded, isSignedIn, user } = useUser()
@@ -35,30 +36,9 @@ export default function Chat() {
                                 <span className="text-[15px] font-semibold text-[#2c2217] tracking-tight">LivePaper</span>
                             </Link>
 
-                            {isAdmin && (
-                            <nav className="flex items-center gap-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
-                            <Link
-                                href="/dashboard"
-                                className="text-sm text-[#8a7060] hover:text-[#2c2217] transition-colors flex items-center gap-1"
-                            >
-                                <FileText className="w-3.5 h-3.5" /> Papers
-                            </Link>
-                            <Link
-                                href="/experts"
-                                className="text-sm font-semibold text-[#6b1f2a] border-b border-[#6b1f2a] pb-0.5 flex items-center gap-1"
-                            >
-                                <Users className="w-3.5 h-3.5" /> Experts
-                            </Link>
-                            <UserButton showName={true} />
-                        </nav>
-                        )}
-
-                                                    
+                            { isAdmin ? <AdminNav /> : <UserButton showName={true} />}
+                          
                         
-                        
-                            <div className="z-10">
-                                <UserButton showName={true} />
-                            </div>
                         </header>
 
                         {/* Paywall content */}
@@ -122,23 +102,7 @@ export default function Chat() {
                         <span className="text-[15px] font-semibold text-[#2c2217] tracking-tight">LivePaper</span>
                     </Link>
 
-                        {isAdmin && (
-                            <nav className="flex items-center gap-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
-                            <Link
-                                href="/dashboard"
-                                className="text-sm text-[#8a7060] hover:text-[#2c2217] transition-colors flex items-center gap-1"
-                            >
-                                <FileText className="w-3.5 h-3.5" /> Papers
-                            </Link>
-                            <Link
-                                href="/experts"
-                                className="text-sm font-semibold text-[#6b1f2a] border-b border-[#6b1f2a] pb-0.5 flex items-center gap-1"
-                            >
-                                <Users className="w-3.5 h-3.5" /> Experts
-                            </Link>
-                            <UserButton showName={true} />
-                        </nav>
-                        )}
+                        { isAdmin ? <AdminNav /> : <UserButton showName={true} />}
 
             
                 </header>
