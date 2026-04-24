@@ -90,6 +90,10 @@ data "aws_iam_policy_document" "ci_access" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
+      # buildx HEADs the manifest before push to dedupe; that maps to BatchGetImage.
+      # DescribeImages keeps `docker buildx imagetools inspect` style calls happy.
+      "ecr:BatchGetImage",
+      "ecr:DescribeImages",
     ]
     resources = ["*"]
   }
