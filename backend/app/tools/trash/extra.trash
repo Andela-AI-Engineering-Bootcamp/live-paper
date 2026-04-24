@@ -1,0 +1,42 @@
+
+    # def register_researcher(self, clerk_id: str, paper_id: str, first_name: str, last_name: str, title: str, email: str, social_media_links: str) -> Dict:
+    #     """
+    #     Registers a researcher in Neo4j and sends a welcome email via Mailjet.
+    #     Args:
+    #         clerk_id (str): Clerk user id
+    #         paper_id (str): Paper id
+    #         first_name (str): First name
+    #         last_name (str): Last name
+    #         title (str): Title
+    #         email (str): Email address
+    #         social_media_links (str): Comma separated social media links
+    #     Returns:
+    #         dict: Registration result
+    #     """
+    #     social_links = [link.strip() for link in social_media_links.split(',') if link.strip()]
+    #     with self.driver.session() as session:
+    #         result = session.run(
+    #             """
+    #             MERGE (r:Researcher {clerk_id: $clerk_id})
+    #             SET r.paper_id = $paper_id,
+    #                 r.first_name = $first_name,
+    #                 r.last_name = $last_name,
+    #                 r.title = $title,`
+    #                 r.email = $email,
+    #                 r.social_media_links = $social_media_links
+    #             RETURN r
+    #             """,
+    #             clerk_id=clerk_id,
+    #             paper_id=paper_id,
+    #             first_name=first_name,
+    #             last_name=last_name,
+    #             title=title,
+    #             email=email,
+    #             social_media_links=social_links
+    #         )
+    #         researcher = result.single()
+    #         if not researcher:
+    #             return {"success": False, "message": "Failed to register researcher in Neo4j."}
+    #     # Send welcome email
+    #     email_result = self._send_welcome_email(email, first_name, title, paper_id)
+    #     return {"success": True, "message": "Researcher registered successfully.", "email_result": email_result}
