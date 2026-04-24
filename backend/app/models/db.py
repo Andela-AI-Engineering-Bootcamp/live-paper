@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    types,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -31,17 +33,42 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class StringList(types.TypeDecorator):
+    """ARRAY(String) on Postgres, JSON list on SQLite — keeps production
+    schema unchanged while still letting tests run against SQLite."""
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(ARRAY(String))
+        return dialect.type_descriptor(JSON())
+
+
+class JSONDict(types.TypeDecorator):
+    """JSONB on Postgres, JSON on SQLite."""
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(JSONB())
+        return dialect.type_descriptor(JSON())
+
+
 class Paper(Base):
     __tablename__ = "papers"
 
     id = Column(String(64), primary_key=True, default=_uuid)
     title = Column(String(500), nullable=False)
-    authors = Column(ARRAY(String), nullable=False, default=list)
+    authors = Column(StringList, nullable=False, default=list)
+    abstract = Column(Text, default="")
     pdf_url = Column(String(2000))
-    key_concepts = Column(ARRAY(String), default=list)
-    methods = Column(ARRAY(String), default=list)
-    findings = Column(ARRAY(String), default=list)
-    open_questions = Column(ARRAY(String), default=list)
+    status = Column(String(20), nullable=False, default="pending")  # pending|running|completed|failed
+    key_concepts = Column(StringList, default=list)
+    methods = Column(StringList, default=list)
+    findings = Column(StringList, default=list)
+    open_questions = Column(StringList, default=list)
     extraction_confidence = Column(Float, default=0.0)
     vector_id = Column(String(64))  # pointer into S3 Vectors
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -59,7 +86,7 @@ class Job(Base):
     paper_id = Column(String(64), ForeignKey("papers.id"), nullable=True)
     status = Column(String(20), nullable=False, default="pending")  # pending|running|completed|failed
     job_type = Column(String(30), nullable=False, default="ingestion")  # ingestion|escalation
-    result = Column(JSONB)
+    result = Column(JSONDict)
     error = Column(Text)
     trace_id = Column(String(64))  # LangFuse trace ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -106,7 +133,7 @@ class ChatMessage(Base):
     session_id = Column(String(64), nullable=False, index=True)
     role = Column(String(10), nullable=False)  # user | assistant
     content = Column(Text, nullable=False)
-    paper_ids = Column(ARRAY(String), default=list)  # papers in scope
+    paper_ids = Column(StringList, default=list)  # papers in scope
     trace_id = Column(String(64))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -120,7 +147,7 @@ class EscalationEvent(Base):
     question = Column(Text, nullable=False)
     gap_description = Column(Text)
     top_confidence = Column(Float)
-    candidate_expert_ids = Column(ARRAY(String), default=list)
-    source_paper_ids = Column(ARRAY(String), default=list)
+    candidate_expert_ids = Column(StringList, default=list)
+    source_paper_ids = Column(StringList, default=list)
     resolved = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

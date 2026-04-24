@@ -8,7 +8,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.agents import retrieval, gap_detector, expert_router
-from app.models.paper import AskRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -46,11 +45,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
         history[:] = history[-20:]
 
     try:
-        result = await retrieval.run(AskRequest(question=request.message))
-        gap = gap_detector.run(result)
+        result = await retrieval.run(request.message)
+        # gap_detector.run is async and returns a bool — True ⇒ escalate.
+        # The previous code did `gap_detector.run(result)` (no await) and then
+        # `gap.escalate`, which threw "'coroutine' object has no attribute 'escalate'"
+        # and swallowed every chat in the generic except below.
+        should_escalate = await gap_detector.run(result)
 
-        if gap.escalate:
-            card = await expert_router.run(gap)
+        if should_escalate:
+            # expert_router.run signature is (question: str, retrieval: RetrievalResult)
+            card = await expert_router.run(request.message, result)
             response_text = (
                 f"I found a knowledge gap on this topic. "
                 f"Your question has been escalated to {card.candidate_authors[0].name if card.candidate_authors else 'a domain expert'}. "

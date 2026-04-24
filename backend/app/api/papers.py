@@ -1,22 +1,24 @@
-"""Papers endpoint — ingest and manage research papers."""
+"""Papers endpoint — ingest and manage research papers.
 
-import uuid
+Backed by Aurora via app.services.database helpers; no in-memory state, so
+running multiple uvicorn workers (or being scheduled across App Runner
+instances later) does not split the read-after-write view a client sees.
+"""
+
 import logging
-import tempfile
 import os
+import tempfile
+import uuid
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
 from app.agents import ingestion
 from app.models.paper import IngestResponse
+from app.services import database as db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/papers", tags=["papers"])
-
-# In-memory stores for MVP — both wired to Aurora in production
-_jobs: dict[str, dict] = {}
-_papers: dict[str, dict] = {}
 
 
 # ── Ingest ────────────────────────────────────────────────────────────────────
@@ -24,15 +26,11 @@ _papers: dict[str, dict] = {}
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_paper(
     background_tasks: BackgroundTasks,
-    # Path 1 — PDF URL
     pdf_url: Optional[str] = Form(None),
-    # Path 2 — file upload
     pdf_file: Optional[UploadFile] = File(None),
-    # Path 3 — manual fields
     title: Optional[str] = Form(None),
-    authors: Optional[str] = Form(None),   # comma-separated string
+    authors: Optional[str] = Form(None),  # comma-separated string
     abstract: Optional[str] = Form(None),
-    # Optional — reuse an existing paper_id (prevents duplicates)
     paper_id: Optional[str] = Form(None),
 ) -> IngestResponse:
     """Single ingest entry point supporting three input paths:
@@ -56,18 +54,20 @@ async def ingest_paper(
 
     pid = paper_id or str(uuid.uuid4())
     job_id = str(uuid.uuid4())
+    author_list = [a.strip() for a in authors.split(",")] if authors else []
 
-    # Auto-create pending paper and job rows immediately
-    _papers[pid] = {
-        "id": pid,
-        "title": title or "Processing…",
-        "authors": [a.strip() for a in authors.split(",")] if authors else [],
-        "abstract": abstract or "",
-        "status": "pending",
-    }
-    _jobs[job_id] = {"status": "pending", "paper_id": pid, "result": None, "error": None}
+    await db.create_paper(
+        paper_id=pid,
+        title=title or "Processing…",
+        authors=author_list,
+        abstract=abstract or "",
+        status="pending",
+        pdf_url=pdf_url,
+    )
+    await db.create_job(job_id=job_id, job_type="ingestion", paper_id=pid)
 
-    # Save uploaded file to temp path so the background task can read it
+    # Persist the upload to a temp file the background task can re-open after
+    # the request body has already been consumed.
     tmp_path = None
     if has_file and not has_url:
         content = await pdf_file.read()
@@ -82,7 +82,7 @@ async def ingest_paper(
         pdf_url=pdf_url,
         tmp_path=tmp_path,
         title=title,
-        authors=[a.strip() for a in authors.split(",")] if authors else [],
+        authors=author_list,
         abstract=abstract,
     )
 
@@ -98,7 +98,8 @@ async def _run_ingestion(
     authors: list[str],
     abstract: Optional[str],
 ) -> None:
-    _jobs[job_id]["status"] = "running"
+    await db.update_job(job_id, status="running")
+    await db.update_paper(paper_id, status="running")
     try:
         if pdf_url:
             extraction = await ingestion.run(pdf_url, paper_id=paper_id)
@@ -113,18 +114,19 @@ async def _run_ingestion(
             )
 
         result = extraction.model_dump()
-        _jobs[job_id] = {"status": "completed", "paper_id": paper_id, "result": result, "error": None}
-        _papers[paper_id].update({
-            "title": extraction.title,
-            "authors": extraction.authors,
-            "status": "completed",
-            "key_concepts": extraction.key_concepts,
-            "findings": extraction.findings,
-        })
+        await db.update_job(job_id, status="completed", result=result)
+        await db.update_paper(
+            paper_id,
+            title=extraction.title,
+            authors=extraction.authors,
+            status="completed",
+            key_concepts=extraction.key_concepts,
+            findings=extraction.findings,
+        )
     except Exception as exc:
         logger.error("Ingestion job %s failed: %s", job_id, exc)
-        _jobs[job_id] = {"status": "failed", "paper_id": paper_id, "result": None, "error": str(exc)}
-        _papers[paper_id]["status"] = "failed"
+        await db.update_job(job_id, status="failed", error=str(exc))
+        await db.update_paper(paper_id, status="failed")
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -132,35 +134,37 @@ async def _run_ingestion(
 
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str) -> dict:
-    if job_id not in _jobs:
+    job = await db.get_job(job_id)
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"job_id": job_id, **_jobs[job_id]}
+    return job
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────
 
 @router.get("")
 async def list_papers() -> list[dict]:
-    return list(_papers.values())
+    return await db.list_papers()
 
 
 @router.get("/{paper_id}")
 async def get_paper(paper_id: str) -> dict:
-    if paper_id not in _papers:
+    paper = await db.get_paper(paper_id)
+    if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    return _papers[paper_id]
+    return paper
 
 
 @router.put("/{paper_id}")
 async def update_paper(paper_id: str, updates: dict) -> dict:
-    if paper_id not in _papers:
+    paper = await db.update_paper(paper_id, **updates)
+    if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    _papers[paper_id].update(updates)
-    return _papers[paper_id]
+    return paper
 
 
 @router.delete("/{paper_id}", status_code=204)
 async def delete_paper(paper_id: str) -> None:
-    if paper_id not in _papers:
+    deleted = await db.delete_paper(paper_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Paper not found")
-    del _papers[paper_id]

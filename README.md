@@ -62,7 +62,7 @@ LivePaper turns static research papers into live documents. Ask a question — g
 
 | Store | What lives here |
 |---|---|
-| **Aurora Serverless v2** | (provisioned) Papers, jobs, experts, chat history, escalation audit trail. *Currently the API still uses in-memory dicts in `app/api/papers.py` for the MVP loop — Aurora schema is deployed and reachable, full ORM wire-up is the next step.* |
+| **Aurora Serverless v2** | Papers, jobs, experts, expert responses, chat history, escalation audit trail. All `/api/papers` and `/api/experts` routes read and write through `app/services/database.py`; the container runs `alembic upgrade head` on every boot before uvicorn starts so schema changes ship with the image. |
 | **Neo4J** | (optional) Knowledge graph — Paper → Concept, Paper → ExpertResponse relationships. App falls back to a no-op when `NEO4J_URI` is empty. |
 | **S3 Vectors** | 384-dim `all-MiniLM-L6-v2` embeddings, mean-pooled from token outputs. Bucket `livepaper-vectors`, index `papers`. |
 
@@ -209,7 +209,7 @@ Required GitHub repo secrets:
 | Secret | Value |
 |---|---|
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | `terraform output ci_access_key_id` / `ci_secret_access_key` (the IAM user Terraform provisioned) |
-| `BACKEND_URL` | `terraform output backend_url` |
+| `NEXT_PUBLIC_API_URL` | `terraform output backend_url` (also used by the post-deploy health-check step) |
 | `FRONTEND_BUCKET` | `terraform output frontend_bucket` |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `terraform output cloudfront_distribution_id` |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk dashboard |
@@ -228,16 +228,38 @@ Set `NEXT_PUBLIC_API_URL` in the frontend `.env.local` to point to the right bac
 | `POST` | `/api/papers/ingest` | Ingest a paper — accepts `pdf_url` (form), file upload, or `title` + `abstract` |
 | `GET` | `/api/papers/jobs/{job_id}` | Poll ingestion job status — `pending / running / completed / failed` |
 | `GET` | `/api/papers` | List all papers |
+| `GET` | `/api/papers/{id}` | Get a single paper |
 | `PUT` | `/api/papers/{id}` | Update a paper |
 | `DELETE` | `/api/papers/{id}` | Delete a paper |
+| `POST` | `/api/papers/{id}/invite-expert` | Mint an `/expert-response` invite link — `{ expert_email, expert_name?, affiliation? }` → `{ invite_url, expert_id, ... }`. Email sending is intentionally not automated; the admin pastes the returned URL into their email tool. |
 | `POST` | `/api/search/ask` | Ask a question — returns cited passages and escalation card if gap detected |
 | `POST` | `/chat` | Multi-turn chat with session history — `{ message, session_id? }` |
-| `GET` | `/api/experts` | List all experts |
-| `GET` | `/api/experts/{id}` | Get a single expert |
-| `POST` | `/api/escalation/respond` | Submit an expert response |
+| `GET` | `/api/experts` | List all experts (populated by both flows below) |
+| `GET` | `/api/experts/{id}` | Get a single expert with the papers they've responded to |
+| `POST` | `/api/expert-responses` | Submit a paper-level expert review — `{ paper_id, expert_email, response, expert_name? }`. Embeds the response, writes it to S3 Vectors + Neo4j, and persists to Aurora. |
+| `POST` | `/api/escalation/respond` | (Legacy escalation flow) Submit an expert response to a specific question |
 | `GET` | `/api/health` | Health check — returns `{ status, graph_nodes }` |
 
 Interactive docs available at `/docs` in debug mode.
+
+### Expert review workflow
+
+There are two paths an expert response can arrive through, and they share
+the same embed → S3 Vectors → Neo4j → Aurora pipeline (the
+`response_ingestion` agent):
+
+1. **Question-driven escalation** — Retrieval Agent flags a gap, Expert
+   Router emits an `EscalationCard`, the expert is asked the specific
+   question, response goes to `POST /api/escalation/respond`.
+2. **Paper-level review (admin invite)** — Admin clicks **Invite** on a
+   paper card in the dashboard, gets back an invite link from
+   `POST /api/papers/{id}/invite-expert`, sends it to the expert. The
+   expert opens the link, fills the form on `/expert-response`, and
+   submits to `POST /api/expert-responses`.
+
+Both flows upsert the expert by email into Aurora (`is_registered=true`
+once they actually respond), so the Experts page always reflects who has
+contributed.
 
 ---
 
@@ -245,19 +267,20 @@ Interactive docs available at `/docs` in debug mode.
 
 ### App Runner environment
 
-The container runs `uvicorn app.main:app --workers 1` (single worker — the in-memory `_jobs` / `_papers` dicts in `app/api/papers.py` would otherwise diverge across worker processes; this goes away when the API is wired to Aurora). Notable env vars set by Terraform:
+The container CMD is `alembic upgrade head && exec uvicorn app.main:app --workers 2` — alembic runs first so schema migrations always land before traffic, and two workers are safe now that all routes persist to Aurora rather than per-process dicts. Notable env vars set by Terraform:
 
 | Variable | Value | Purpose |
 |---|---|---|
 | `DEBUG` | `false` | Enables prod validators in `app/core/config.py` |
 | `CORS_ORIGINS` | `https://<cloudfront-domain>,http://localhost:3000` | Allow the deployed frontend (and dev) to call the API |
+| `FRONTEND_URL` | `https://<cloudfront-domain>` | Used by `POST /api/papers/{id}/invite-expert` to build invite links pointing at the deployed frontend |
 | `BEDROCK_MODEL_ID` | `us.amazon.nova-pro-v1:0` | Cross-region inference profile used by LiteLLM |
 | `BEDROCK_REGION` | `us-west-2` | LiteLLM region hint (the inference profile may route elsewhere) |
 | `SAGEMAKER_ENDPOINT` | `alex-embedding-endpoint` | Embedding endpoint (see Architecture → LLM and Embeddings) |
 | `VECTOR_BUCKET` | `livepaper-vectors` | S3 Vectors bucket name |
 | `VECTOR_INDEX` | `papers` | Required by `s3vectors:PutVectors` / `QueryVectors` |
 | `AURORA_CLUSTER_ARN` / `AURORA_HOST` / `AURORA_PORT` / `AURORA_DATABASE` / `AURORA_USERNAME` | from Aurora outputs | DB connection |
-| `AURORA_PASSWORD` | injected from Secrets Manager | Aurora's managed master-user password is JSON-encoded; `app/services/database.py:_resolve_password()` parses it before handing to asyncpg |
+| `AURORA_PASSWORD` | injected from Secrets Manager | Aurora's managed master-user password is JSON-encoded; `app/services/database.py:_resolve_password()` parses it before handing to asyncpg (and `alembic/env.py` mirrors that logic) |
 | `OPENAI_API_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`, `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` | Secrets Manager | Application secrets |
 
 ### Networking
