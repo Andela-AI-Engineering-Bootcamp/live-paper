@@ -5,10 +5,12 @@ SQLite in-memory database when AURORA_CLUSTER_ARN is not set (dev mode),
 so the team can run locally without AWS credentials.
 """
 
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+from urllib.parse import quote_plus
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -20,6 +22,18 @@ _engine = None
 _session_factory = None
 
 
+def _resolve_password(raw: str) -> str:
+    """Aurora's managed master-user secret stores credentials as JSON
+    ({"username": ..., "password": ...}). App Runner injects the whole
+    secret string verbatim, so unwrap it here when present."""
+    if raw.startswith("{"):
+        try:
+            return json.loads(raw).get("password", raw)
+        except json.JSONDecodeError:
+            return raw
+    return raw
+
+
 def _build_url() -> str:
     cluster_arn = os.getenv("AURORA_CLUSTER_ARN", "")
 
@@ -27,14 +41,13 @@ def _build_url() -> str:
         logger.warning("AURORA_CLUSTER_ARN not set — using SQLite in-memory (dev mode)")
         return "sqlite+aiosqlite:///:memory:"
 
-    # Aurora Serverless v2 via standard Postgres driver
     host = os.getenv("AURORA_HOST", "")
     port = os.getenv("AURORA_PORT", "5432")
     db = os.getenv("AURORA_DATABASE", "livepaper")
     user = os.getenv("AURORA_USERNAME", "livepaper")
-    password = os.getenv("AURORA_PASSWORD", "")
+    password = _resolve_password(os.getenv("AURORA_PASSWORD", ""))
 
-    return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
+    return f"postgresql+asyncpg://{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{db}"
 
 
 def _get_engine():
