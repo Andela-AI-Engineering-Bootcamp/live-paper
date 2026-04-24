@@ -1,8 +1,41 @@
-# LivePaper
-
-> Research papers, made answerable. Every paper, live. Every expert, reachable.
-
 **Andela AI Engineering Bootcamp — Capstone 2025**
+
+### Problem
+We all read research papers, first we read the topic, then we read abstract, we hope it answers the questions we have, so we invest good time trying to understand the paper, in the end we leave with even more questions. 
+
+Even worse, while paper abstracts are public, full papers are hidden behind paywalls, this means we invest money and time only to leave with more questions.
+
+### Solution
+Introducing LivePaper, LivePaper turns static research papers into live documents.  With LivePaper, a researcher simply asks questions, LivePaper returns a few papers answering the question, with a few focus papers, the researcher can continue to chat with the focused papers. Where a question is not directly/clearly answered by the paper, LivePaper passes the question to the author(s) or expert(s) in realtime. Response from the authors/experts is then be added to the knowledge base to improve the quality of subsequent results
+
+### How it works in practice
+Three core systems:
+Ingestion: this involves 2 key steps
+Reading the paper
+Enriching the paper: using a model to extract key features of the paper: 
+Concept 
+Method
+findings
+
+Storage: 
+2 key storage types and one backup/evaluation storage
+Raw papers details in a typical database (Postgres)
+Storing enrichment data in graph database (Neo4J)
+Vector Db (S3 Vector)
+
+
+Retrieval
+Understand the query
+Intent Extraction: classify the query into an intent, this intent is later passed to the model that ranks search result, allowing it to prioritize the right paper
+Query Expansion: generate synonyms of the query, basically, you are using a model to generate multiple ways the query could have been written
+Multi Retrieval
+Get matches from the Vector DB (RAG)
+Keyword query: get exact keyword matches
+Get relational matches from the graph
+Rank Result
+Here we use a model to rank the result from the 
+
+
 
 ### Live deployment
 
@@ -14,15 +47,6 @@
 
 ---
 
-## The Problem
-
-You read a paper abstract, invest hours (and money behind a paywall), and leave with *more* questions than you started with. The authors who could answer them are unreachable.
-
-## The Solution
-
-LivePaper turns static research papers into live documents. Ask a question — get cited answers from every ingested paper simultaneously. When no paper has the answer, LivePaper routes your question directly to the author in real time. Their response is added to the knowledge base, making every future answer smarter.
-
----
 
 ## Architecture
 
