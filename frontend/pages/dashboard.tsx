@@ -23,7 +23,7 @@ interface Paper {
     authors: Author[];
     abstract: string;
     paper_url: string;
-    pdf_url: string;
+    pdf_url?: string;
 }
 
 interface PaperForm {
@@ -31,7 +31,7 @@ interface PaperForm {
     authors: Author[];
     abstract: string;
     paper_url: string;
-    pdf_url: string;
+    pdf_url?: string;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -149,8 +149,7 @@ export default function AdminDashboard() {
         setSubmitting(true);
         try {
             const payload = {
-                ...form,
-                authors: form.authors.filter(a => a.name.trim()),
+                ...form
             };
 
             if (editingPaper) {
