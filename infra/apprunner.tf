@@ -97,6 +97,11 @@ resource "aws_iam_role_policy_attachment" "task_aurora_secret" {
   policy_arn = aws_iam_policy.aurora_secret_access.arn
 }
 
+resource "aws_iam_role_policy_attachment" "task_papers_raw" {
+  role       = aws_iam_role.apprunner_task.name
+  policy_arn = aws_iam_policy.papers_raw_access.arn
+}
+
 # ── Bedrock — allow Nova Pro calls ────────────────────────────────────────────
 
 data "aws_iam_policy_document" "bedrock_invoke" {
@@ -143,12 +148,16 @@ resource "aws_apprunner_service" "backend" {
           SQS_ESCALATION_QUEUE_URL = aws_sqs_queue.escalation.url
           BEDROCK_MODEL_ID       = "us.amazon.nova-pro-v1:0"
           BEDROCK_REGION         = "us-west-2"
+          NEO4J_URI              = var.neo4j_uri
+          NEO4J_USERNAME         = var.neo4j_username
+          PAPERS_RAW_BUCKET      = aws_s3_bucket.papers_raw.bucket
         }
         runtime_environment_secrets = {
           AURORA_PASSWORD      = aws_rds_cluster.aurora.master_user_secret[0].secret_arn
           OPENAI_API_KEY       = aws_secretsmanager_secret.openai.arn
           LANGFUSE_PUBLIC_KEY  = aws_secretsmanager_secret.langfuse_public.arn
           LANGFUSE_SECRET_KEY  = aws_secretsmanager_secret.langfuse_secret.arn
+          NEO4J_PASSWORD       = aws_secretsmanager_secret.neo4j_password.arn
         }
       }
     }
@@ -204,4 +213,13 @@ resource "aws_secretsmanager_secret" "langfuse_secret" {
 resource "aws_secretsmanager_secret_version" "langfuse_secret" {
   secret_id     = aws_secretsmanager_secret.langfuse_secret.id
   secret_string = var.langfuse_secret_key
+}
+
+resource "aws_secretsmanager_secret" "neo4j_password" {
+  name = "${var.app_name}/neo4j-password"
+}
+
+resource "aws_secretsmanager_secret_version" "neo4j_password" {
+  secret_id     = aws_secretsmanager_secret.neo4j_password.id
+  secret_string = var.neo4j_password
 }
