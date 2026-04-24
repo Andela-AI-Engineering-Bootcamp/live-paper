@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_PREFIX: str = "/api"
     CORS_ORIGINS: str = "http://localhost:3000"
+    FRONTEND_URL: str = ""  # used to build expert-invite links; e.g. https://d123.cloudfront.net
 
     # AI
     OPENAI_API_KEY: str = ""
@@ -51,7 +52,9 @@ class Settings(BaseSettings):
     # Retrieval
     GAP_CONFIDENCE_THRESHOLD: float = 0.55
 
-    model_config = {"env_file": ".env", "case_sensitive": True}
+    # extra="ignore" lets us coexist with ambient env vars (AWS credentials,
+    # PATH, etc.) that pydantic_settings would otherwise reject in strict mode.
+    model_config = {"env_file": ".env", "case_sensitive": True, "extra": "ignore"}
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":

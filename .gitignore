@@ -1,7 +1,7 @@
-# This is added by Trash-Bin vscode extension
-backend/app/tools/ii.trh
-backend/app/tools/extra.trash
-# This is the end of Trash-Bin vscode extension
+# Trash-Bin / VS Code soft-delete artifacts (don't commit these)
+*.trh
+*.trash
+**/trash/
 
 # Python
 __pycache__/
@@ -37,6 +37,10 @@ infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.*
 infra/*.tfplan
+# Terraform variable files often contain real secrets (Neo4j password, etc.)
+infra/*.tfvars
+infra/*.tfvars.json
+!infra/*.tfvars.example
 
 # Logs
 *.log

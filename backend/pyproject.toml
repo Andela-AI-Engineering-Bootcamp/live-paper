@@ -21,8 +21,9 @@ dependencies = [
     "pymupdf>=1.24.0",
     # Graph DB
     "neo4j>=5.20.0",
-    # Observability
-    "langfuse>=2.0.0",
+    # Observability — pin <3 because the v3 SDK dropped the legacy auth_check
+    # and @observe APIs we use in app/agents/base.py
+    "langfuse>=2.0.0,<3.0.0",
     # Retry
     "tenacity>=8.2.0",
     # Database (Aurora Serverless v2)
@@ -30,8 +31,8 @@ dependencies = [
     "asyncpg>=0.30.0",
     "aiosqlite>=0.21.0",
     "alembic>=1.13.0",
+    # Email (used by app/tools/research_vetter.py)
     "mailjet-rest>=1.5.1",
-    "dotenv>=0.9.9",
 ]
 
 [project.optional-dependencies]

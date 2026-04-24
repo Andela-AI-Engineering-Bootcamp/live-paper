@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+# Find these in the Neo4j Aura console after creating an instance.
+neo4j_uri      = "neo4j+s://<instance-id>.databases.neo4j.io"
+neo4j_username = "neo4j"
+neo4j_password = "REPLACE_ME"
