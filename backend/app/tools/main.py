@@ -52,7 +52,7 @@ def get_vetter():
 
 # --- API Endpoints ---
 
-@app.post("/assessment/start")
+@app.post("api/assessment/start")
 async def start_assessment(
     req: AssessmentRequest, 
     vetter: ResearchVetter = Depends(get_vetter)
@@ -107,7 +107,7 @@ async def start_assessment(
         detail = str(e) if "Maximum number of tries" in str(e) else "Failed to initialize assessment."
         raise HTTPException(status_code=400, detail=detail)
 
-@app.post("/assessment/submit")
+@app.post("api/assessment/submit")
 async def submit_assessment(
     req: SubmissionRequest, 
     vetter: ResearchVetter = Depends(get_vetter)
@@ -159,7 +159,7 @@ async def submit_assessment(
         print(f"Error in submit_assessment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/paper/ask-question")
+@app.post("api/paper/ask-question")
 async def ask_question(
     req: QuestionRequest,  
     vetter: ResearchVetter = Depends(get_vetter)
@@ -214,7 +214,7 @@ async def ask_question(
         print(f"Error in ask_question: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit your question.")
 
-@app.post("/paper/answer-question")
+@app.post("api/paper/answer-question")
 async def answer_question(
     req: AnswerQuestionRequest,  
     vetter: ResearchVetter = Depends(get_vetter)

@@ -44,7 +44,7 @@ variable "sagemaker_model_image" {
   description = "ECR image URI for the SageMaker embedding model (all-MiniLM-L6-v2)"
   type        = string
   # Uses HuggingFace DLC — replace with your own if needed
-  default     = "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.1.0-transformers4.37.0-cpu-py310-ubuntu22.04"
+  default = "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.1.0-transformers4.37.0-cpu-py310-ubuntu22.04"
 }
 
 variable "sagemaker_max_concurrency" {
@@ -75,6 +75,25 @@ variable "langfuse_secret_key" {
 
 variable "openai_api_key" {
   description = "OpenAI API key (stored in Secrets Manager)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "neo4j_uri" {
+  description = "Neo4J Aura connection URI (leave empty to skip graph writes)"
+  type        = string
+  default     = ""
+}
+
+variable "neo4j_username" {
+  description = "Neo4J username"
+  type        = string
+  default     = "neo4j"
+}
+
+variable "neo4j_password" {
+  description = "Neo4J password (stored in Secrets Manager)"
   type        = string
   sensitive   = true
   default     = ""

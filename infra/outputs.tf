@@ -32,12 +32,12 @@ output "sqs_escalation_url" {
 
 output "vector_bucket_name" {
   description = "S3 Vectors bucket name"
-  value       = aws_s3vectors_vector_bucket.papers.vector_bucket_name
+  value       = local.vector_bucket_name
 }
 
 output "sagemaker_endpoint_name" {
-  description = "SageMaker embedding endpoint name — set as SAGEMAKER_ENDPOINT env var"
-  value       = aws_sagemaker_endpoint.embeddings.name
+  description = "SageMaker embedding endpoint name (not provisioned — backend uses local sentence-transformers)"
+  value       = "${var.app_name}-embedding-endpoint"
 }
 
 output "frontend_url" {
@@ -53,4 +53,15 @@ output "frontend_bucket" {
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID — needed for cache invalidation after deploy"
   value       = aws_cloudfront_distribution.frontend.id
+}
+
+output "ci_access_key_id" {
+  description = "AWS_ACCESS_KEY_ID for GitHub Actions secrets"
+  value       = aws_iam_access_key.ci.id
+}
+
+output "ci_secret_access_key" {
+  description = "AWS_SECRET_ACCESS_KEY for GitHub Actions secrets"
+  value       = aws_iam_access_key.ci.secret
+  sensitive   = true
 }

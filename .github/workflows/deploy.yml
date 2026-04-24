@@ -86,6 +86,9 @@ jobs:
         id: ecr_login
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -130,7 +133,9 @@ jobs:
       - name: Build static export
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.BACKEND_URL }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           npm ci
           npm run build
@@ -154,7 +159,7 @@ jobs:
     steps:
       - name: Health check
         run: |
-          URL="${{ secrets.BACKEND_URL }}/api/health"
+          URL="${{ secrets.NEXT_PUBLIC_API_URL }}/api/health"
           echo "Checking $URL"
           for i in {1..10}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")

@@ -14,14 +14,20 @@ import logging
 
 from app.agents.base import get_langfuse
 from app.models.paper import ExpertResponse
+from app.services import database as db
 from app.services import embeddings as embed_svc
 from app.services import graph, storage
 
 logger = logging.getLogger(__name__)
 
 
-async def run(response: ExpertResponse, question: str) -> str:
-    """Ingest an expert response. Returns the vector ID of the stored embedding."""
+async def run(response: ExpertResponse, question: str, expert_email: str | None = None) -> str:
+    """Ingest an expert response. Returns the vector ID of the stored embedding.
+
+    `expert_email` is the natural identifier used to upsert into Aurora; when
+    omitted (the legacy escalation flow doesn't capture an address) we fall
+    back to a synthetic local-part so the upsert key still exists.
+    """
     lf = get_langfuse()
     trace_obj = lf.trace(
         name="response-ingestion",
@@ -50,6 +56,25 @@ async def run(response: ExpertResponse, question: str) -> str:
             expert_name=response.expert_name,
             response_text=response.response_text,
             question=question,
+        )
+
+        # Populate Aurora so the experts list and the new expert-response
+        # endpoint can both see this person. Email-less experts (the legacy
+        # escalation flow doesn't require one) get a synthetic local-part so
+        # the upsert key still exists; real flows pass a proper address.
+        upsert_email = expert_email or f"{response.expert_name.lower().replace(' ', '.')}@unknown.local"
+        expert_id = await db.upsert_expert(
+            email=upsert_email,
+            name=response.expert_name,
+            affiliation=response.affiliation,
+            is_registered=True,
+        )
+        await db.create_expert_response(
+            paper_id=response.source_paper_id,
+            expert_id=expert_id,
+            question=question,
+            response_text=response.response_text,
+            vector_id=vector_id,
         )
 
         if trace_obj:

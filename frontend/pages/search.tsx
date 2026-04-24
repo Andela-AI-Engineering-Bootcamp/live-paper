@@ -70,7 +70,7 @@ export default function SearchPage() {
       response_text: `Based on current evidence, the most effective artemisinin combination therapy (ACT) for children under 5 in high-transmission zones is artemether-lumefantrine (AL). Dosing should be weight-based at 1.7/10 mg/kg twice daily for 3 days. This recommendation is supported by WHO 2023 guidelines.`,
       source_paper_id: result.escalation_card.source_paper_ids[0] || "paper-1",
     };
-    await api.ingestExpertResponse(mockResponse, question);
+    await api.ingestExpertResponse(mockResponse);
     // Re-ask same question to show instant answer
     const newResult = await api.ask(question);
     setResult(newResult);

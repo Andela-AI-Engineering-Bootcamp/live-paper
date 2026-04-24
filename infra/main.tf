@@ -39,4 +39,9 @@ data "aws_subnets" "default" {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+  # us-east-1e (use1-az3) does not support App Runner VPC connectors
+  filter {
+    name   = "availabilityZone"
+    values = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
+  }
 }

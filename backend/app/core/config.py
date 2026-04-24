@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_PREFIX: str = "/api"
     CORS_ORIGINS: str = "http://localhost:3000"
+    FRONTEND_URL: str = ""  # used to build expert-invite links; e.g. https://d123.cloudfront.net
 
     # AI
     OPENAI_API_KEY: str = ""
@@ -51,27 +52,30 @@ class Settings(BaseSettings):
     # Retrieval
     GAP_CONFIDENCE_THRESHOLD: float = 0.55
 
-    model_config = {"env_file": ".env", "case_sensitive": True}
+    # extra="ignore" lets us coexist with ambient env vars (AWS credentials,
+    # PATH, etc.) that pydantic_settings would otherwise reject in strict mode.
+    model_config = {"env_file": ".env", "case_sensitive": True, "extra": "ignore"}
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         if self.DEBUG:
             return self
 
-        missing = [
-            name
-            for name, val in {
-                "OPENAI_API_KEY": self.OPENAI_API_KEY,
-                "AURORA_CLUSTER_ARN": self.AURORA_CLUSTER_ARN,
-                "VECTOR_BUCKET": self.VECTOR_BUCKET,
-                "NEO4J_URI": self.NEO4J_URI,
-                "NEO4J_PASSWORD": self.NEO4J_PASSWORD,
-                "SQS_INGESTION_QUEUE_URL": self.SQS_INGESTION_QUEUE_URL,
-            }.items()
-            if not val
-        ]
-        if missing:
-            raise ValueError(f"Missing required secrets for production: {', '.join(missing)}")
+        # Only OPENAI_API_KEY is hard-required: every agent calls an LLM. Aurora,
+        # S3 Vectors, SQS, Neo4J, and SageMaker each have a documented dev fallback
+        # (SQLite in-memory, in-memory cosine search, sync executor, no-op graph,
+        # local sentence-transformers) so an empty value just downgrades the tier.
+        if not self.OPENAI_API_KEY:
+            raise ValueError("Missing required secret for production: OPENAI_API_KEY")
+
+        for name, val in {
+            "AURORA_CLUSTER_ARN": self.AURORA_CLUSTER_ARN,
+            "VECTOR_BUCKET": self.VECTOR_BUCKET,
+            "SQS_INGESTION_QUEUE_URL": self.SQS_INGESTION_QUEUE_URL,
+            "NEO4J_URI": self.NEO4J_URI,
+        }.items():
+            if not val:
+                warnings.warn(f"{name} not set in production — using dev fallback for that tier.")
 
         if not self.LANGFUSE_PUBLIC_KEY:
             warnings.warn("LANGFUSE_PUBLIC_KEY not set — agent traces will not be recorded.")

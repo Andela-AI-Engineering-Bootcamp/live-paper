@@ -42,13 +42,40 @@ async def embed(text: str) -> list[float]:
             Body=payload,
         )
         result = json.loads(response["Body"].read())
-        # SageMaker returns [[embedding]] — extract the vector
-        if isinstance(result, list) and isinstance(result[0], list):
-            return result[0]
-        return result
+        return _to_sentence_vector(result)
     except Exception as exc:
         logger.warning("SageMaker embedding failed, using local fallback: %s", exc)
         return await _local_embed(text)
+
+
+def _to_sentence_vector(result) -> list[float]:
+    """Normalise SageMaker output to a flat 384-dim sentence embedding.
+
+    Hugging Face feature-extraction returns [batch][token][hidden]; we mean-pool
+    across the token axis. Some endpoints return [batch][hidden] or just [hidden].
+    """
+    if isinstance(result, dict):
+        result = result.get("embeddings") or result.get("vectors") or result.get("data")
+
+    if not isinstance(result, list) or not result:
+        raise ValueError(f"Unexpected embedding payload: {type(result).__name__}")
+
+    first = result[0]
+    if isinstance(first, (int, float)):
+        return [float(x) for x in result]
+    if isinstance(first, list) and first and isinstance(first[0], (int, float)):
+        return [float(x) for x in first]
+    if isinstance(first, list) and first and isinstance(first[0], list):
+        tokens = first
+        dim = len(tokens[0])
+        pooled = [0.0] * dim
+        for tok in tokens:
+            for i, v in enumerate(tok):
+                pooled[i] += float(v)
+        n = len(tokens)
+        return [v / n for v in pooled]
+
+    raise ValueError("Embedding payload shape not recognised")
 
 
 async def _local_embed(text: str) -> list[float]:
