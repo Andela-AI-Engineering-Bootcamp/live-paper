@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import chat, escalation, experts, health, papers, search
+from app.services.database import init_db
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("LivePaper API starting up")
+    # In dev (no AURORA_CLUSTER_ARN) this creates SQLite tables; in prod it is
+    # a no-op because schema is owned by alembic, run from the container CMD.
+    await init_db()
     yield
     logger.info("LivePaper API shut down")
 
