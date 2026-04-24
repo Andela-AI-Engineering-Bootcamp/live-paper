@@ -68,8 +68,24 @@ async def query_similar(
             queryVector={"float32": vector},
             topK=top_k,
             returnMetadata=True,
+            # Without this the response carries no distance field at all, so
+            # downstream r.get("score") falls back to 0 and gap_detector
+            # escalates every single chat turn.
+            returnDistance=True,
         )
-        return response.get("vectors", [])
+        # The S3 Vectors index is configured with cosine distance, so
+        # similarity = 1 - distance lands in the [-1, 1] range that
+        # retrieval.py already expects (with the GAP_CONFIDENCE_THRESHOLD
+        # default of 0.55 corresponding to "fairly relevant").
+        results = []
+        for v in response.get("vectors", []):
+            distance = float(v.get("distance", 1.0))
+            results.append({
+                "key": v.get("key", ""),
+                "score": 1.0 - distance,
+                "metadata": v.get("metadata", {}),
+            })
+        return results
     except Exception as exc:
         logger.error("S3 Vectors query failed: %s", exc)
         raise
