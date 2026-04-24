@@ -39,7 +39,7 @@ export default function ExpertResponse() {
 
         async function fetchPaper() {
             try {
-                const res = await fetch(`${API}/papers/${paper_id}`);
+                const res = await fetch(`${API}/api/papers/${paper_id}`);
                 if (!res.ok) throw new Error('Paper not found');
                 const data = await res.json();
                 setPaper(data);
