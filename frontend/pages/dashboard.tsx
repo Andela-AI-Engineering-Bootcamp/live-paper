@@ -192,7 +192,7 @@ export default function AdminDashboard() {
                     <span className="text-[15px] font-semibold tracking-tight">LivePaper</span>
                 </Link>
                 <AdminNav />
-                <UserButton showName={true} />
+                
             </header>
 
             {/* Main */}
