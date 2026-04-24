@@ -109,3 +109,29 @@ class JobStatus(BaseModel):
     created_at: datetime
     result: Optional[dict] = None
     error: Optional[str] = None
+
+
+class ExpertResponseSubmission(BaseModel):
+    """Body of POST /api/expert-responses — what the expert-response form posts
+    after an admin sent the expert an invite link."""
+    paper_id: str = Field(min_length=1)
+    expert_email: str = Field(min_length=3)  # accept loose strings; we just upsert by it
+    response: str = Field(min_length=1)
+    expert_name: Optional[str] = None  # optional override; defaults to email local-part
+
+
+class ExpertInviteRequest(BaseModel):
+    """Body of POST /api/papers/{paper_id}/invite-expert — an admin uses this
+    to mint an invite link (email sending is intentionally out of scope; the
+    response carries the link for the admin to deliver however they want)."""
+    expert_email: str = Field(min_length=3)
+    expert_name: Optional[str] = None
+    affiliation: Optional[str] = None
+
+
+class ExpertInviteResponse(BaseModel):
+    expert_id: str
+    invite_url: str
+    paper_id: str
+    expert_email: str
+    message: str

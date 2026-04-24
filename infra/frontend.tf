@@ -36,12 +36,25 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+# ── CloudFront Function: rewrite subpath URLs to their index.html ────────────
+# Next.js static export emits pages as `<route>/index.html`. CloudFront's
+# `default_root_object` only handles `/`, so without this function `/chat`
+# returns the raw S3 AccessDenied XML.
+
+resource "aws_cloudfront_function" "rewrite_index" {
+  name    = "${var.app_name}-rewrite-index"
+  runtime = "cloudfront-js-2.0"
+  comment = "Append /index.html to subpath URLs for the Next.js static export"
+  publish = true
+  code    = file("${path.module}/cloudfront/rewrite-index.js")
+}
+
 # ── CloudFront Distribution ───────────────────────────────────────────────────
 
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   default_root_object = "index.html"
-  price_class         = "PriceClass_100"  # US + Europe only — cheapest tier
+  price_class         = "PriceClass_100" # US + Europe only — cheapest tier
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -56,6 +69,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite_index.arn
+    }
+
     forwarded_values {
       query_string = false
       cookies { forward = "none" }
@@ -66,11 +84,18 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 86400
   }
 
-  # SPA fallback — route 404s back to index.html so Next.js handles routing
+  # OAC + private bucket returns 403 (not 404) for missing keys, so map both
+  # to /index.html. With the rewrite function above, these only fire for
+  # genuinely-unknown routes (e.g. typos), and the SPA shows its own 404 UI.
   custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+  custom_error_response {
+    error_code         = 403
+    response_code      = 200
+    response_page_path = "/index.html"
   }
 
   restrictions {

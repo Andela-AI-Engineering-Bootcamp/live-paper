@@ -42,22 +42,57 @@ async def embed(text: str) -> list[float]:
             Body=payload,
         )
         result = json.loads(response["Body"].read())
-        # SageMaker returns [[embedding]] — extract the vector
-        if isinstance(result, list) and isinstance(result[0], list):
-            return result[0]
-        return result
+        return _to_sentence_vector(result)
     except Exception as exc:
         logger.warning("SageMaker embedding failed, using local fallback: %s", exc)
         return await _local_embed(text)
 
 
+def _to_sentence_vector(result) -> list[float]:
+    """Normalise SageMaker output to a flat 384-dim sentence embedding.
+
+    Hugging Face feature-extraction returns [batch][token][hidden]; we mean-pool
+    across the token axis. Some endpoints return [batch][hidden] or just [hidden].
+    """
+    if isinstance(result, dict):
+        result = result.get("embeddings") or result.get("vectors") or result.get("data")
+
+    if not isinstance(result, list) or not result:
+        raise ValueError(f"Unexpected embedding payload: {type(result).__name__}")
+
+    first = result[0]
+    if isinstance(first, (int, float)):
+        return [float(x) for x in result]
+    if isinstance(first, list) and first and isinstance(first[0], (int, float)):
+        return [float(x) for x in first]
+    if isinstance(first, list) and first and isinstance(first[0], list):
+        tokens = first
+        dim = len(tokens[0])
+        pooled = [0.0] * dim
+        for tok in tokens:
+            for i, v in enumerate(tok):
+                pooled[i] += float(v)
+        n = len(tokens)
+        return [v / n for v in pooled]
+
+    raise ValueError("Embedding payload shape not recognised")
+
+
 async def _local_embed(text: str) -> list[float]:
-    """Local fallback using sentence-transformers (dev only)."""
+    """Local fallback using sentence-transformers (dev only).
+
+    Raises if sentence-transformers is unavailable. Returning a zero vector
+    here used to silently poison S3 Vectors queries — every search would hit
+    `ValidationException: Query vector contains invalid values`. Better to
+    fail loud so the upstream caller (and logs) surface the real problem.
+    """
     try:
         from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        vector = model.encode(text).tolist()
-        return vector
-    except ImportError:
-        logger.warning("sentence-transformers not installed — returning zero vector")
-        return [0.0] * 384
+    except ImportError as exc:
+        raise RuntimeError(
+            "Embedding service unavailable: SAGEMAKER_ENDPOINT is unset or failing "
+            "and sentence-transformers is not installed for local fallback."
+        ) from exc
+
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    return model.encode(text).tolist()

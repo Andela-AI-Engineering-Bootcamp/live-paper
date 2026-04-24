@@ -6,7 +6,8 @@ import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import {
     BookOpen, Plus, Trash2, Pencil, X, ExternalLink,
-    FileText, Users, ChevronRight, AlertCircle, Loader2, UserPlus
+    FileText, Users, ChevronRight, AlertCircle, Loader2, UserPlus,
+    Mail, Copy, Check, Send
 } from 'lucide-react';
 import Footer from '../components/Footer';
 import AdminNav from '@/components/AdminNav';
@@ -56,6 +57,16 @@ export default function AdminDashboard() {
     const [submitting, setSubmitting] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [error, setError] = useState('');
+
+    // Invite-expert modal — separate from the add/edit modal so we don't
+    // accidentally clobber paper-form state when toggling between them.
+    const [invitingPaper, setInvitingPaper] = useState<Paper | null>(null);
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteName, setInviteName] = useState('');
+    const [inviteSubmitting, setInviteSubmitting] = useState(false);
+    const [inviteUrl, setInviteUrl] = useState('');
+    const [inviteError, setInviteError] = useState('');
+    const [linkCopied, setLinkCopied] = useState(false);
 
     // Guard: only admins
     useEffect(() => {
@@ -167,12 +178,73 @@ export default function AdminDashboard() {
     async function handleDelete(id: string) {
         setDeleteId(id);
         try {
-            await fetch(`${API}/papers/${id}`, { method: 'DELETE' });
+            await fetch(`${API}/api/papers/${id}`, { method: 'DELETE' });
             setPapers(prev => prev.filter(p => p.id !== id));
         } catch {
             setError('Failed to delete paper.');
         } finally {
             setDeleteId(null);
+        }
+    }
+
+    // ── Invite expert ─────────────────────────────────────────────────────────
+
+    function openInvite(paper: Paper) {
+        setInvitingPaper(paper);
+        setInviteEmail('');
+        setInviteName('');
+        setInviteUrl('');
+        setInviteError('');
+        setLinkCopied(false);
+    }
+
+    function closeInvite() {
+        setInvitingPaper(null);
+        setInviteEmail('');
+        setInviteName('');
+        setInviteUrl('');
+        setInviteError('');
+        setLinkCopied(false);
+    }
+
+    async function handleInviteSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!invitingPaper || !inviteEmail.trim()) return;
+
+        setInviteSubmitting(true);
+        setInviteError('');
+        try {
+            const res = await fetch(`${API}/api/papers/${invitingPaper.id}/invite-expert`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    expert_email: inviteEmail.trim(),
+                    expert_name: inviteName.trim() || undefined,
+                }),
+            });
+            if (!res.ok) {
+                const detail = await res.json().catch(() => ({}));
+                throw new Error(detail.detail || 'Request failed');
+            }
+            const data = await res.json();
+            setInviteUrl(data.invite_url);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to create invite link.';
+            setInviteError(message);
+        } finally {
+            setInviteSubmitting(false);
+        }
+    }
+
+    async function copyInviteLink() {
+        if (!inviteUrl) return;
+        try {
+            await navigator.clipboard.writeText(inviteUrl);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch {
+            // Older browsers / non-secure contexts: leave the link in the textbox
+            // for manual copy.
         }
     }
 
@@ -295,6 +367,13 @@ export default function AdminDashboard() {
                                         </td>
                                         <td className="px-5 py-4">
                                             <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => openInvite(paper)}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d4c8bc] text-[#6b1f2a] text-xs font-medium hover:bg-[#f5e6e8] hover:border-[#6b1f2a] transition-all duration-150"
+                                                    title="Generate an invite link to share with an expert reviewer"
+                                                >
+                                                    <Mail className="w-3 h-3" /> Invite
+                                                </button>
                                                 <button
                                                     onClick={() => openEdit(paper)}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d4c8bc] text-[#5a4535] text-xs font-medium hover:bg-[#ede6dc] hover:border-[#6b1f2a] transition-all duration-150"
@@ -497,6 +576,139 @@ export default function AdminDashboard() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Invite Expert Modal */}
+            {invitingPaper && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-[#2c2217]/40 backdrop-blur-sm"
+                        onClick={closeInvite}
+                    />
+                    <div
+                        className="relative bg-[#f5f0eb] rounded-2xl border border-[#e0d8cf] shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                        style={{ fontFamily: 'system-ui, sans-serif' }}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e0d8cf]">
+                            <div>
+                                <h2 className="text-[15px] font-semibold text-[#2c2217]" style={{ fontFamily: "'Georgia', serif" }}>
+                                    Invite an Expert
+                                </h2>
+                                <p className="text-xs text-[#8a7060] mt-0.5 line-clamp-1">
+                                    {invitingPaper.title}
+                                </p>
+                            </div>
+                            <button onClick={closeInvite} className="text-[#8a7060] hover:text-[#2c2217] transition-colors shrink-0 ml-2">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* If we already have a link, show it; otherwise show the form. */}
+                        {inviteUrl ? (
+                            <div className="px-6 py-5 space-y-4">
+                                <div className="bg-white border border-[#e0d8cf] rounded-xl p-4">
+                                    <p className="text-xs text-[#8a7060] mb-2">
+                                        Share this link with <span className="font-medium text-[#2c2217]">{inviteEmail}</span>:
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={inviteUrl}
+                                            onFocus={e => e.target.select()}
+                                            className="flex-1 px-3 py-2 rounded-lg border border-[#d4c8bc] bg-[#faf7f4] text-[#2c2217] text-xs focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a]"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={copyInviteLink}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#6b1f2a] text-white text-xs font-semibold hover:bg-[#4e1520] transition-all duration-150 shrink-0"
+                                        >
+                                            {linkCopied ? (
+                                                <><Check className="w-3.5 h-3.5" /> Copied</>
+                                            ) : (
+                                                <><Copy className="w-3.5 h-3.5" /> Copy</>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-[#8a7060] leading-relaxed">
+                                    The expert was added to your reviewers list. They&apos;ll show up as registered
+                                    once they submit a response. Email delivery is not automated yet — paste the
+                                    link into your email tool of choice.
+                                </p>
+                                <button
+                                    onClick={closeInvite}
+                                    className="w-full py-2.5 rounded-lg border border-[#d4c8bc] text-[#5a4535] text-sm font-medium hover:bg-[#ede6dc] transition-all duration-150"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleInviteSubmit} className="px-6 py-5 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">
+                                        Expert Email <span className="text-[#6b1f2a]">*</span>
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={inviteEmail}
+                                        onChange={e => setInviteEmail(e.target.value)}
+                                        placeholder="expert@university.edu"
+                                        required
+                                        autoFocus
+                                        className="w-full px-4 py-2.5 rounded-lg border border-[#d4c8bc] bg-white text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#5a4535] uppercase tracking-wider mb-1.5">
+                                        Expert Name <span className="text-[#b0a090] normal-case font-normal">(optional)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={inviteName}
+                                        onChange={e => setInviteName(e.target.value)}
+                                        placeholder="Dr. Jane Smith"
+                                        className="w-full px-4 py-2.5 rounded-lg border border-[#d4c8bc] bg-white text-[#2c2217] placeholder-[#b0a090] text-sm focus:outline-none focus:border-[#6b1f2a] focus:ring-1 focus:ring-[#6b1f2a] transition-all"
+                                    />
+                                </div>
+
+                                {inviteError && (
+                                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs">
+                                        <AlertCircle className="w-4 h-4 shrink-0" />
+                                        {inviteError}
+                                    </div>
+                                )}
+
+                                <p className="text-xs text-[#8a7060] leading-relaxed">
+                                    We&apos;ll create an invite link for this expert. You&apos;ll get the link to share —
+                                    we don&apos;t send email yet.
+                                </p>
+
+                                <div className="flex gap-3 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={closeInvite}
+                                        className="flex-1 px-4 py-2.5 rounded-lg border border-[#d4c8bc] text-[#5a4535] text-sm font-medium hover:bg-[#ede6dc] transition-all duration-150"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={inviteSubmitting || !inviteEmail.trim()}
+                                        className="flex-1 px-4 py-2.5 rounded-lg bg-[#6b1f2a] text-white text-sm font-semibold hover:bg-[#4e1520] active:scale-95 transition-all duration-150 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                                    >
+                                        {inviteSubmitting ? (
+                                            <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+                                        ) : (
+                                            <><Send className="w-4 h-4" /> Generate Link</>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}
