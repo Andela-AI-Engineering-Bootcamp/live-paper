@@ -37,6 +37,10 @@ infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.*
 infra/*.tfplan
+# Terraform variable files often contain real secrets (Neo4j password, etc.)
+infra/*.tfvars
+infra/*.tfvars.json
+!infra/*.tfvars.example
 
 # Logs
 *.log
