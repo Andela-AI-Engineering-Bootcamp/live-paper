@@ -8,7 +8,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.agents import retrieval, gap_detector, expert_router
-from app.models.paper import AskRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -46,7 +45,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         history[:] = history[-20:]
 
     try:
-        result = await retrieval.run(AskRequest(question=request.message))
+        result = await retrieval.run(request.message)
         gap = gap_detector.run(result)
 
         if gap.escalate:
