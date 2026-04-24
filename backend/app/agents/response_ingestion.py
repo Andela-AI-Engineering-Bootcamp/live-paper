@@ -21,8 +21,13 @@ from app.services import graph, storage
 logger = logging.getLogger(__name__)
 
 
-async def run(response: ExpertResponse, question: str) -> str:
-    """Ingest an expert response. Returns the vector ID of the stored embedding."""
+async def run(response: ExpertResponse, question: str, expert_email: str | None = None) -> str:
+    """Ingest an expert response. Returns the vector ID of the stored embedding.
+
+    `expert_email` is the natural identifier used to upsert into Aurora; when
+    omitted (the legacy escalation flow doesn't capture an address) we fall
+    back to a synthetic local-part so the upsert key still exists.
+    """
     lf = get_langfuse()
     trace_obj = lf.trace(
         name="response-ingestion",
@@ -53,13 +58,13 @@ async def run(response: ExpertResponse, question: str) -> str:
             question=question,
         )
 
-        # Populate Aurora so the experts list and the future expert-response
+        # Populate Aurora so the experts list and the new expert-response
         # endpoint can both see this person. Email-less experts (the legacy
         # escalation flow doesn't require one) get a synthetic local-part so
         # the upsert key still exists; real flows pass a proper address.
-        synthetic_email = f"{response.expert_name.lower().replace(' ', '.')}@unknown.local"
+        upsert_email = expert_email or f"{response.expert_name.lower().replace(' ', '.')}@unknown.local"
         expert_id = await db.upsert_expert(
-            email=synthetic_email,
+            email=upsert_email,
             name=response.expert_name,
             affiliation=response.affiliation,
             is_registered=True,
