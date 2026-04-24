@@ -79,12 +79,20 @@ def _to_sentence_vector(result) -> list[float]:
 
 
 async def _local_embed(text: str) -> list[float]:
-    """Local fallback using sentence-transformers (dev only)."""
+    """Local fallback using sentence-transformers (dev only).
+
+    Raises if sentence-transformers is unavailable. Returning a zero vector
+    here used to silently poison S3 Vectors queries — every search would hit
+    `ValidationException: Query vector contains invalid values`. Better to
+    fail loud so the upstream caller (and logs) surface the real problem.
+    """
     try:
         from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        vector = model.encode(text).tolist()
-        return vector
-    except ImportError:
-        logger.warning("sentence-transformers not installed — returning zero vector")
-        return [0.0] * 384
+    except ImportError as exc:
+        raise RuntimeError(
+            "Embedding service unavailable: SAGEMAKER_ENDPOINT is unset or failing "
+            "and sentence-transformers is not installed for local fallback."
+        ) from exc
+
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    return model.encode(text).tolist()
