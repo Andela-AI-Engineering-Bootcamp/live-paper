@@ -111,6 +111,7 @@ pip install ".[dev]"
 
 # Copy and edit env (all AWS vars can stay empty for dev)
 cp ../.env.example .env
+# Optional expert / Mailjet vars — see `backend/.env.example.expert`, merge into `.env` if needed
 
 pytest          # unit + integration suites, all green
 uvicorn app.main:app --reload --port 8000

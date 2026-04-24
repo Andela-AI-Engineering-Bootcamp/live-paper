@@ -61,19 +61,15 @@ export default function ExpertResponse() {
         setSubmitError('');
 
         try {
-<<<<<<< HEAD
-            const res = await fetch(`${API}/api/paper/answer-question`, {
-=======
+            const pid = Array.isArray(paper_id) ? paper_id[0] : paper_id;
+            const email = Array.isArray(expert_email) ? expert_email[0] : expert_email;
             const res = await fetch(`${API}/api/expert-responses`, {
->>>>>>> main
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    paper_id,
-                    email: expert_email,
-                    question_id,
-                    summary: paper.abstract,
-                    answer: response.trim(),
+                    paper_id: pid,
+                    expert_email: email,
+                    response: response.trim(),
                 }),
             });
 
