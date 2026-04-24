@@ -1,6 +1,6 @@
-import type { Config } from "tailwindcss";
+// @ts-check
 
-const config: Config = {
+const config = {
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./styles/**/*.{ts,tsx}"],
   theme: {
     extend: {

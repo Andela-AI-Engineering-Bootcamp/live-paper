@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import escalation, health, papers, search
+from app.api import chat, escalation, experts, health, papers, search
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,8 @@ def create_app() -> FastAPI:
     app.include_router(papers.router, prefix=prefix)
     app.include_router(search.router, prefix=prefix)
     app.include_router(escalation.router, prefix=prefix)
+    app.include_router(experts.router, prefix=prefix)
+    app.include_router(chat.router)  # /chat (no /api prefix — matches frontend)
 
     @app.get("/")
     async def root() -> dict:

@@ -20,21 +20,37 @@ async def test_root(client):
 
 
 @pytest.mark.asyncio
-async def test_ingest_requires_pdf_url(client):
-    response = await client.post("/api/papers/ingest", json={})
-    assert response.status_code == 400
+async def test_ingest_requires_pdf_url_or_manual_fields(client):
+    # Empty form — missing all paths
+    response = await client.post("/api/papers/ingest", data={})
+    assert response.status_code == 422
+
+    # title without abstract — still invalid
+    response = await client.post("/api/papers/ingest", data={"title": "A Paper"})
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_ingest_returns_job_id(client):
+    # PDF URL path
     response = await client.post(
         "/api/papers/ingest",
-        json={"pdf_url": "https://example.com/paper.pdf"},
+        data={"pdf_url": "https://example.com/paper.pdf"},
     )
     assert response.status_code == 200
     data = response.json()
     assert "job_id" in data
     assert data["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_ingest_manual_path(client):
+    response = await client.post(
+        "/api/papers/ingest",
+        data={"title": "A Paper", "abstract": "This paper studies X.", "authors": "Smith, J."},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending"
 
 
 @pytest.mark.asyncio
