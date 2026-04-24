@@ -54,3 +54,14 @@ output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID — needed for cache invalidation after deploy"
   value       = aws_cloudfront_distribution.frontend.id
 }
+
+output "ci_access_key_id" {
+  description = "AWS_ACCESS_KEY_ID for GitHub Actions secrets"
+  value       = aws_iam_access_key.ci.id
+}
+
+output "ci_secret_access_key" {
+  description = "AWS_SECRET_ACCESS_KEY for GitHub Actions secrets"
+  value       = aws_iam_access_key.ci.secret
+  sensitive   = true
+}

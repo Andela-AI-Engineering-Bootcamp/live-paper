@@ -63,8 +63,11 @@ resource "aws_rds_cluster_instance" "aurora_writer" {
 
 data "aws_iam_policy_document" "aurora_secret_access" {
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_rds_cluster.aurora.master_user_secret[0].secret_arn]
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      aws_rds_cluster.aurora.master_user_secret[0].secret_arn,
+      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.app_name}/*",
+    ]
   }
 }
 

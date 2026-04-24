@@ -58,3 +58,60 @@ resource "aws_s3_bucket_public_access_block" "papers_raw" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# ── IAM — allow App Runner task role to read/write raw PDFs ──────────────────
+
+data "aws_iam_policy_document" "papers_raw_access" {
+  statement {
+    actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.papers_raw.arn}/*"]
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.papers_raw.arn]
+  }
+}
+
+resource "aws_iam_policy" "papers_raw_access" {
+  name   = "${var.app_name}-papers-raw-access"
+  policy = data.aws_iam_policy_document.papers_raw_access.json
+}
+
+# ── IAM — CI user for GitHub Actions (ECR push + S3 deploy) ──────────────────
+
+resource "aws_iam_user" "ci" {
+  name = "${var.app_name}-ci"
+}
+
+resource "aws_iam_access_key" "ci" {
+  user = aws_iam_user.ci.name
+}
+
+data "aws_iam_policy_document" "ci_access" {
+  statement {
+    actions = [
+      "ecr:GetAuthorizationToken",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "ci_ecr" {
+  name   = "${var.app_name}-ci-ecr"
+  policy = data.aws_iam_policy_document.ci_access.json
+}
+
+resource "aws_iam_user_policy_attachment" "ci_ecr" {
+  user       = aws_iam_user.ci.name
+  policy_arn = aws_iam_policy.ci_ecr.arn
+}
+
+resource "aws_iam_user_policy_attachment" "ci_frontend_deploy" {
+  user       = aws_iam_user.ci.name
+  policy_arn = aws_iam_policy.frontend_deploy.arn
+}
