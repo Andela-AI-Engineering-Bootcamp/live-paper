@@ -1,6 +1,7 @@
 # This is added by Trash-Bin vscode extension
 backend/app/tools/ii.trh
 backend/app/tools/extra.trash
+backend/app/tools/trash/assessment.schema.trh
 # This is the end of Trash-Bin vscode extension
 
 # Python
