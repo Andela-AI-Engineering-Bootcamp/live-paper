@@ -1,0 +1,8 @@
+For Mr Seun:
+
+A tool that the model can use to sending question that cannot be answered from paper to experts by mail. The mail should contain a link that the expert can click, the link should open to the EXPERT RESPONSE FORM
+
+An endpoint where the EXPERT RESPONSE is submitted. This endpoint also runs the expert response through a model and only adds it to database if makes sense
+
+
+Endpoints on adding experts: first one is called when the applicant selects the paper they want to become expert on, this endpoint replies with a list of questions to be answered by the applicant…….A second endpoint that takes the full applicant details evaluates the responses then decides if to add the applicant as expert. Finally send a mail to the applicant

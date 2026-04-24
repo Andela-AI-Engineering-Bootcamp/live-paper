@@ -14,9 +14,9 @@ import os
 import tempfile
 from typing import Optional
 
-import httpx
-import fitz  # PyMuPDF
-from agents import Agent, Runner, trace
+import httpx # type: ignore
+import fitz  # PyMuPDF # type: ignore
+from agents import Agent, Runner, trace # type: ignore
 
 from app.agents.base import get_langfuse, get_model
 from app.models.paper import PaperExtraction

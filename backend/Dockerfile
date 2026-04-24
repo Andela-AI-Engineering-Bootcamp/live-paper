@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir ".[prod]"
 COPY app/ app/
 
 # Non-root user
-RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
-USER appuser
+# RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
+# USER appuser
 
 EXPOSE 8000
 
