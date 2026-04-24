@@ -146,6 +146,7 @@ resource "aws_apprunner_service" "backend" {
           DEBUG                    = "false"
           AWS_REGION               = var.aws_region
           CORS_ORIGINS             = "https://${aws_cloudfront_distribution.frontend.domain_name},http://localhost:3000"
+          FRONTEND_URL             = "https://${aws_cloudfront_distribution.frontend.domain_name}"
           AURORA_CLUSTER_ARN       = aws_rds_cluster.aurora.arn
           AURORA_HOST              = aws_rds_cluster.aurora.endpoint
           AURORA_PORT              = "5432"
