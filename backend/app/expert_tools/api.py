@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from pydantic import BaseModel, ConfigDict
 from openai import OpenAI  
 from dotenv import load_dotenv
@@ -11,7 +11,8 @@ from database_manager import DatabaseManager
 
 load_dotenv()
 
-app = FastAPI(title="Academic Vetting API")
+# app = FastAPI(title="Academic Vetting API")
+router = APIRouter(tags=["expert-tools"])
 
 # --- Pydantic Models ---
 class AssessmentRequest(BaseModel): 
@@ -52,7 +53,7 @@ def get_vetter():
 
 # --- API Endpoints ---
 
-@app.post("api/assessment/start")
+@router.post("api/assessment/start")
 async def start_assessment(
     req: AssessmentRequest, 
     vetter: ResearchVetter = Depends(get_vetter)
@@ -107,7 +108,7 @@ async def start_assessment(
         detail = str(e) if "Maximum number of tries" in str(e) else "Failed to initialize assessment."
         raise HTTPException(status_code=400, detail=detail)
 
-@app.post("api/assessment/submit")
+@router.post("/assessment/submit")
 async def submit_assessment(
     req: SubmissionRequest, 
     vetter: ResearchVetter = Depends(get_vetter)
@@ -159,7 +160,7 @@ async def submit_assessment(
         print(f"Error in submit_assessment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("api/paper/ask-question")
+@router.post("/paper/ask-question")
 async def ask_question(
     req: QuestionRequest,  
     vetter: ResearchVetter = Depends(get_vetter)
@@ -214,7 +215,7 @@ async def ask_question(
         print(f"Error in ask_question: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit your question.")
 
-@app.post("api/paper/answer-question")
+@router.post("/paper/answer-question")
 async def answer_question(
     req: AnswerQuestionRequest,  
     vetter: ResearchVetter = Depends(get_vetter)
