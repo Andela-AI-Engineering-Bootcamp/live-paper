@@ -38,8 +38,20 @@ def _build_url() -> str:
     cluster_arn = os.getenv("AURORA_CLUSTER_ARN", "")
 
     if not cluster_arn:
-        logger.warning("AURORA_CLUSTER_ARN not set — using SQLite in-memory (dev mode)")
-        return "sqlite+aiosqlite:///:memory:"
+        # Multi-worker uvicorn (--workers 2 in the Dockerfile) gives every
+        # process its own ":memory:" database, so a job created by worker A
+        # is invisible to worker B's polling request. Default to a shared
+        # file path on disk for any environment that opts in via SQLITE_PATH;
+        # tests leave it unset so they keep the fast in-memory path.
+        sqlite_path = os.getenv("SQLITE_PATH", ":memory:")
+        logger.warning(
+            "AURORA_CLUSTER_ARN not set — using SQLite at %s (dev mode)", sqlite_path
+        )
+        if sqlite_path == ":memory:":
+            return "sqlite+aiosqlite:///:memory:"
+        # Three slashes + leading absolute path == four slashes total, which
+        # is SQLAlchemy's syntax for an absolute filesystem path.
+        return f"sqlite+aiosqlite:///{sqlite_path}"
 
     host = os.getenv("AURORA_HOST", "")
     port = os.getenv("AURORA_PORT", "5432")
