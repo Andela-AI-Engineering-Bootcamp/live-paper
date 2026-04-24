@@ -7,7 +7,7 @@
 
 resource "aws_sqs_queue" "ingestion_dlq" {
   name                      = "${var.app_name}-ingestion-dlq"
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds = 1209600 # 14 days
 }
 
 resource "aws_sqs_queue" "escalation_dlq" {

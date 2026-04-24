@@ -28,7 +28,7 @@ dependencies = [
     "neo4j>=5.20.0",
 
     # Observability
-    "langfuse>=2.0.0",
+    "langfuse>=2.0.0,<3.0.0",
 
     # Retry
     "tenacity>=8.2.0",

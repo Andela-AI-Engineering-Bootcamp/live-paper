@@ -167,7 +167,7 @@ export default function AdminDashboard() {
     async function handleDelete(id: string) {
         setDeleteId(id);
         try {
-            await fetch(`${API}/papers/${id}`, { method: 'DELETE' });
+            await fetch(`${API}/api/papers/${id}`, { method: 'DELETE' });
             setPapers(prev => prev.filter(p => p.id !== id));
         } catch {
             setError('Failed to delete paper.');

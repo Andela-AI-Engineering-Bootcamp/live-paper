@@ -30,6 +30,13 @@ Thumbs.db
 .cursor/
 .vscode/
 .idea/
+.claude/
+
+# Terraform working directory (providers, plan cache, local state)
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan
 
 # Logs
 *.log
