@@ -136,6 +136,29 @@ Add these secrets in **GitHub → Settings → Secrets → Actions**:
 
 ---
 
+## API Reference
+
+All endpoints are served at `http://localhost:8000` in dev, and at the App Runner URL in production.
+Set `NEXT_PUBLIC_API_URL` in the frontend `.env.local` to point to the right backend.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/papers/ingest` | Ingest a paper — accepts `pdf_url` (form), file upload, or `title` + `abstract` |
+| `GET` | `/api/papers/jobs/{job_id}` | Poll ingestion job status — `pending / running / completed / failed` |
+| `GET` | `/api/papers` | List all papers |
+| `PUT` | `/api/papers/{id}` | Update a paper |
+| `DELETE` | `/api/papers/{id}` | Delete a paper |
+| `POST` | `/api/search/ask` | Ask a question — returns cited passages and escalation card if gap detected |
+| `POST` | `/chat` | Multi-turn chat with session history — `{ message, session_id? }` |
+| `GET` | `/api/experts` | List all experts |
+| `GET` | `/api/experts/{id}` | Get a single expert |
+| `POST` | `/api/escalation/respond` | Submit an expert response |
+| `GET` | `/api/health` | Health check — returns `{ status, graph_nodes }` |
+
+Interactive docs available at `/docs` in debug mode.
+
+---
+
 ## Observability
 
 All five agents are instrumented with LangFuse. Every request produces:

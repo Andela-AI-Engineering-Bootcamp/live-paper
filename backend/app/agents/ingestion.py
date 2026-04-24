@@ -12,6 +12,7 @@ Pipeline:
 import logging
 import os
 import tempfile
+import uuid
 from typing import Optional
 
 import httpx
@@ -77,8 +78,41 @@ async def run(pdf_url: str, paper_id: Optional[str] = None) -> PaperExtraction:
         raise
 
 
+async def run_from_file(tmp_path: str, paper_id: Optional[str] = None) -> PaperExtraction:
+    """Ingest from an already-saved local PDF file (uploaded via multipart form)."""
+    lf = get_langfuse()
+    trace_obj = lf.trace(name="ingestion-agent-file", input={"paper_id": paper_id}) if lf else None
+    try:
+        text = _extract_text_from_path(tmp_path)
+        pid = paper_id or str(uuid.uuid4())
+        extraction = await _enrich(text, pid)
+
+        vector = await embed_svc.embed(extraction.title + " " + " ".join(extraction.key_concepts))
+        await storage.store_embedding(
+            text=extraction.title,
+            vector=vector,
+            metadata={
+                "paper_id": pid,
+                "title": extraction.title,
+                "authors": ", ".join(extraction.authors),
+                "findings": "; ".join(extraction.findings[:3]),
+            },
+            paper_id=pid,
+        )
+        await graph.write_paper_node(pid, {"title": extraction.title, "authors": extraction.authors})
+        await graph.write_concept_nodes(pid, extraction.key_concepts)
+
+        if trace_obj:
+            trace_obj.update(output=extraction.model_dump(), status="success")
+        return extraction
+    except Exception as exc:
+        if trace_obj:
+            trace_obj.update(status="error", error=str(exc))
+        raise
+
+
 async def _extract_text(pdf_url: str) -> str:
-    """Download PDF and extract plain text."""
+    """Download PDF from URL and extract plain text."""
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(pdf_url)
         response.raise_for_status()
@@ -88,13 +122,17 @@ async def _extract_text(pdf_url: str) -> str:
         tmp_path = tmp.name
 
     try:
-        doc = fitz.open(tmp_path)
-        text = "\n".join(page.get_text() for page in doc)
-        doc.close()
+        return _extract_text_from_path(tmp_path)
     finally:
         os.unlink(tmp_path)
 
-    return text[:12000]  # cap at ~3k tokens for LLM enrichment
+
+def _extract_text_from_path(path: str) -> str:
+    """Extract plain text from a local PDF file."""
+    doc = fitz.open(path)
+    text = "\n".join(page.get_text() for page in doc)
+    doc.close()
+    return text[:12000]
 
 
 async def run_manual(

@@ -50,9 +50,9 @@ export default function AdminDashboard() {
     async function fetchPapers() {
         setLoading(true);
         try {
-            const res = await fetch(`${API}/papers`);
+            const res = await fetch(`${API}/api/papers`);
             const data = await res.json();
-            //setPapers(data);
+            setPapers(data);
         } catch {
             setError('Failed to load papers.');
         } finally {
@@ -89,16 +89,22 @@ export default function AdminDashboard() {
         setSubmitting(true);
         try {
             if (editingPaper) {
-                await fetch(`${API}/papers/${editingPaper.id}`, {
+                await fetch(`${API}/api/papers/${editingPaper.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(form),
                 });
             } else {
-                await fetch(`${API}/papers`, {
+                // New paper — use FormData so the unified ingest endpoint
+                // can handle pdf_url, file upload, or manual fields
+                const fd = new FormData();
+                fd.append('title', form.title);
+                fd.append('authors', form.authors);
+                fd.append('abstract', form.abstract);
+                if (form.paper_url) fd.append('pdf_url', form.paper_url);
+                await fetch(`${API}/api/papers/ingest`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(form),
+                    body: fd,
                 });
             }
             await fetchPapers();
@@ -113,7 +119,7 @@ export default function AdminDashboard() {
     async function handleDelete(id: string) {
         setDeleteId(id);
         try {
-            await fetch(`${API}/papers/${id}`, { method: 'DELETE' });
+            await fetch(`${API}/api/papers/${id}`, { method: 'DELETE' });
             setPapers(prev => prev.filter(p => p.id !== id));
         } catch {
             setError('Failed to delete paper.');
