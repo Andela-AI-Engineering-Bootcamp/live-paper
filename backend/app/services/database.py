@@ -382,7 +382,7 @@ async def create_expert_response(
     return response_id
 
 
-# ── Authors (NEW - normalized) ────────────────────────────────────────────────
+# ── Authors (NEW - normalized implementation) ────────────────────────────────────────────────
 
 from sqlalchemy import select, func
 
