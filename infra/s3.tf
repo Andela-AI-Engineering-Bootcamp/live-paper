@@ -33,7 +33,7 @@ resource "aws_iam_policy" "s3vectors_access" {
 # ── S3 bucket for raw PDF storage ────────────────────────────────────────────
 
 resource "aws_s3_bucket" "papers_raw" {
-  bucket = "${var.app_name}-papers-raw"
+  bucket = "${var.app_name}-papers-raw-293184993462"
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "papers_raw" {
@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "papers_raw_access" {
 }
 
 resource "aws_iam_policy" "papers_raw_access" {
-  name   = "${var.app_name}-papers-raw-access"
+  name   = "${var.app_name}-papers-raw-accessyes"
   policy = data.aws_iam_policy_document.papers_raw_access.json
 }
 

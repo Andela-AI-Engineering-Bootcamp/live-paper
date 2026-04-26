@@ -166,8 +166,8 @@ export default function AdminDashboard() {
                     .filter(a => a.name.trim())
                     .map(a => a.name.trim())
                     .join(', ');
-                if (form.pdf_url.trim()) {
-                    fd.append('pdf_url', form.pdf_url.trim());
+                if (form?.pdf_url?.trim()) {
+                    fd.append('pdf_url', form?.pdf_url?.trim());
                     if (form.title.trim()) fd.append('title', form.title.trim());
                     if (form.abstract.trim()) fd.append('abstract', form.abstract.trim());
                     if (authorsStr) fd.append('authors', authorsStr);

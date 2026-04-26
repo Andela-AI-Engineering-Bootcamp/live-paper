@@ -10,7 +10,7 @@ terraform {
 
   # Remote state in S3 — swap bucket/key before first apply
   backend "s3" {
-    bucket = "livepaper-tf-state"
+    bucket = "livepaper-tf-state-293184993462"
     key    = "live-paper/terraform.tfstate"
     region = "us-east-1"
   }
