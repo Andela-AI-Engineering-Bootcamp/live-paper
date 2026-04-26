@@ -71,7 +71,7 @@ async def ingest_paper(
     await db.create_paper(
         paper_id=pid,
         title=title or "Processing…",
-        authors=author_list,
+        authors=[],  # ❗ DO NOT pre-fill authors
         abstract=abstract or "",
         status="pending",
         pdf_url=pdf_url,
