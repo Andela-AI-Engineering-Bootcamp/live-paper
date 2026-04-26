@@ -25,6 +25,46 @@ resource "aws_ecr_lifecycle_policy" "backend" {
   })
 }
 
+# ── ECR Image Guard ───────────────────────────────────────────────────────────
+# Fails fast with a clear message BEFORE App Runner spends 3 minutes
+# waiting only to report the same error. Blocks the service from being
+# created until the image tag actually exists in ECR.
+
+resource "null_resource" "ecr_image_exists" {
+  triggers = {
+    image_tag        = var.backend_image_tag
+    repository_name  = aws_ecr_repository.backend.name
+    aws_region       = var.aws_region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOF
+      echo "Checking ECR for image tag: ${var.backend_image_tag}"
+      aws ecr describe-images \
+        --repository-name ${aws_ecr_repository.backend.name} \
+        --image-ids imageTag=${var.backend_image_tag} \
+        --region ${var.aws_region} \
+        --query 'imageDetails[0].imageTags' \
+        --output text \
+      || (echo "" \
+          && echo "==========================================================" \
+          && echo "ERROR: Image '${var.backend_image_tag}' not found in ECR." \
+          && echo "Push your image first:" \
+          && echo "" \
+          && echo "  aws ecr get-login-password --region ${var.aws_region} | \\" \
+          && echo "    docker login --username AWS --password-stdin \\" \
+          && echo "    ${aws_ecr_repository.backend.repository_url}" \
+          && echo "" \
+          && echo "  docker build -t ${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag} ." \
+          && echo "  docker push ${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}" \
+          && echo "==========================================================" \
+          && exit 1)
+    EOF
+  }
+
+  depends_on = [aws_ecr_repository.backend]
+}
+
 # ── App Runner IAM ────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "apprunner_access" {
@@ -128,10 +168,16 @@ resource "aws_iam_role_policy_attachment" "task_bedrock" {
   policy_arn = aws_iam_policy.bedrock_invoke.arn
 }
 
-# ── App Runner Service ─────────────────────────────────────────────────────────
+# ── App Runner Service ────────────────────────────────────────────────────────
 
 resource "aws_apprunner_service" "backend" {
   service_name = "${var.app_name}-backend"
+
+  # ✅ Block creation until the image is confirmed present in ECR
+  depends_on = [
+    null_resource.ecr_image_exists,
+    aws_iam_role_policy_attachment.apprunner_ecr,
+  ]
 
   source_configuration {
     authentication_configuration {
@@ -147,31 +193,11 @@ resource "aws_apprunner_service" "backend" {
           AWS_REGION               = var.aws_region
           CORS_ORIGINS             = "https://${aws_cloudfront_distribution.frontend.domain_name},http://localhost:3000"
           FRONTEND_URL             = "https://${aws_cloudfront_distribution.frontend.domain_name}"
-          # TEMPORARY — Aurora is unreachable from App Runner DEFAULT egress:
-          # AWS does not publish App Runner egress CIDRs in ip-ranges.json, so
-          # `data.aws_ip_ranges.apprunner.cidr_blocks` is empty and the Aurora
-          # SG never gets a valid public ingress rule. Switching to the VPC
-          # connector would require a NAT Gateway (~$32/mo) for SageMaker /
-          # Bedrock / OpenAI / Neo4j Aura / Langfuse internet egress.
-          #
-          # Empty AURORA_CLUSTER_ARN triggers the SQLite-in-memory fallback
-          # in app/services/database.py:_build_url and skips `alembic upgrade
-          # head` in the Dockerfile CMD. The cluster + secrets stay
-          # provisioned so re-enabling is a one-line change once we build
-          # out NAT + private subnets in a follow-up PR.
           AURORA_CLUSTER_ARN       = ""
-          # AURORA_CLUSTER_ARN       = aws_rds_cluster.aurora.arn
           AURORA_HOST              = aws_rds_cluster.aurora.endpoint
           AURORA_PORT              = "5432"
           AURORA_DATABASE          = var.aurora_db_name
           AURORA_USERNAME          = var.aurora_username
-
-          # Demo-rescue companion to the empty AURORA_CLUSTER_ARN above:
-          # ensures both uvicorn workers in the container share one SQLite
-          # file. Without this, each worker would hold its own ":memory:"
-          # database and ingest jobs created by one worker would 404 when
-          # polled via the other. Container ephemeral storage is fine —
-          # state already disappears on every redeploy in this mode.
           SQLITE_PATH              = "/tmp/livepaper.db"
           VECTOR_BUCKET            = local.vector_bucket_name
           VECTOR_INDEX             = "papers"
@@ -228,8 +254,6 @@ resource "aws_secretsmanager_secret_version" "openai" {
   secret_id     = aws_secretsmanager_secret.openai.id
   secret_string = var.openai_api_key != "" ? var.openai_api_key : "set-via-aws-cli"
 
-  # Bootstrap only — rotate via `aws secretsmanager put-secret-value` so we don't
-  # have to pass keys on every apply.
   lifecycle {
     ignore_changes = [secret_string]
   }
@@ -273,3 +297,5 @@ resource "aws_secretsmanager_secret_version" "neo4j_password" {
     ignore_changes = [secret_string]
   }
 }
+
+

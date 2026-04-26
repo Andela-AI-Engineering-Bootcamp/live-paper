@@ -352,3 +352,97 @@ View live traces → [cloud.langfuse.com](https://cloud.langfuse.com)
 **Frontend:** Next.js 15 · Tailwind CSS · TypeScript
 
 **Infrastructure:** AWS App Runner · Aurora Serverless v2 · S3 Vectors · SageMaker Serverless · SQS · ECR · Terraform
+
+## Building docker image for the backend
+cd into the backend directory
+
+- Step 1 — Authenticate:
+```
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin \
+  123456789012.dkr.ecr.us-east-1.amazonaws.com
+```
+
+- Step 2 — Build and push (single command)
+
+```
+`docker buildx build \
+  --platform linux/amd64 \
+  --network host \
+  -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/livepaper-backend:latest \
+  --push \
+  .`
+```
+
+- Step 3 — Verify the image is there
+
+```
+aws ecr describe-images \
+  --repository-name livepaper-backend \
+  --region us-east-1 \
+  --query 'imageDetails[*].{Tag:imageTags[0],Size:imageSizeInBytes,Pushed:imagePushedAt}' \
+  --output table
+```
+
+- Step 3 — Verify the image is there
+Return to infra directory
+run `terraform apply`
+
+## Build and deploy the frontend
+cd into the frontend folder
+`npm run build`
+
+ Upload the export to S3
+```
+aws s3 sync out/ s3://livepaper-frontend-123456789012 \
+  --delete \
+  --cache-control "public, max-age=3600"
+```
+
+# Invalidate CloudFront cache
+```
+aws cloudfront create-invalidation \
+  --distribution-id YOUR_DISTRIBUTION_ID \
+  --paths "/*"
+```
+
+
+## Setup steps
+1. Make sure you have these installed:
+
+AWS CLI (aws --version)
+Terraform (terraform --version)
+2. Configure your AWS credentials locally:
+
+
+aws configure
+Enter your AWS Access Key ID, Secret Access Key, and set region to us-east-1.
+
+3. Clone/pull the live-paper repo and go to the infra folder:
+
+
+cd live-paper/infra
+4. Create the Terraform state bucket in your account first:
+
+
+aws s3 mb s3://livepaper-tf-state --region us-east-1
+aws s3api put-bucket-versioning --bucket livepaper-tf-state --versioning-configuration Status=Enabled
+5. Run Terraform:
+
+
+terraform init
+terraform apply
+Type yes when prompted. Takes about 10–15 minutes.
+
+6. After it finishes, run:
+
+
+terraform output
+Share the outputs with me — specifically backend_url, frontend_url, ci_access_key_id, and ci_secret_access_key.
+
+7. Also create the S3 Vectors bucket manually (Terraform can't do this yet):
+
+
+aws s3vectors create-vector-bucket --vector-bucket-name livepaper-vectors
+aws s3vectors create-index --vector-bucket-name livepaper-vectors --index-name papers --data-type float32 --dimension 384 --distance-metric cosine
+Once your infrastructure is live, update the GitHub secrets and then I can safely destroy my setup.
