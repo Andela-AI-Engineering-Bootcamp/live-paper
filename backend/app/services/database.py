@@ -204,6 +204,10 @@ async def create_paper(
             status=status,
             pdf_url=pdf_url,
         ))
+        # NEW: normalized authors (same session!)
+        for idx, author_name in enumerate(authors or []):
+            author_id = await upsert_author(session, name=author_name)
+            await link_author_to_paper(session, paper_id, author_id, idx)
 
 
 async def update_paper(paper_id: str, **fields) -> dict | None:
@@ -376,3 +380,71 @@ async def create_expert_response(
             vector_id=vector_id,
         ))
     return response_id
+
+
+# ── Authors (NEW - normalized implementation) ────────────────────────────────────────────────
+
+from sqlalchemy import select, func
+
+async def upsert_author(
+    session,
+    name: str,
+    email: str | None = None,
+    affiliation: str | None = None,
+) -> str:
+    import uuid
+    from app.models.db import Author
+
+    clean_name = name.strip()
+    normalized_name = clean_name.lower()
+
+    if email:
+        result = await session.execute(
+            select(Author).where(Author.email == email)
+        )
+    else:
+        result = await session.execute(
+            select(Author).where(func.lower(Author.name) == normalized_name)
+        )
+
+    author = result.scalar_one_or_none()
+
+    if author:
+        if affiliation and not author.affiliation:
+            author.affiliation = affiliation
+        return author.id
+
+    new_id = str(uuid.uuid4())
+    session.add(Author(
+        id=new_id,
+        name=clean_name,   # ✅ preserve formatting
+        email=email,
+        affiliation=affiliation,
+    ))
+    return new_id
+
+
+async def link_author_to_paper(
+    session,
+    paper_id: str,
+    author_id: str,
+    author_order: int,
+) -> None:
+    from sqlalchemy import select
+    from app.models.db import PaperAuthor
+
+    existing = await session.execute(
+        select(PaperAuthor).where(
+            PaperAuthor.paper_id == paper_id,
+            PaperAuthor.author_id == author_id,
+        )
+    )
+
+    if existing.scalar_one_or_none():
+        return
+
+    session.add(PaperAuthor(
+        paper_id=paper_id,
+        author_id=author_id,
+        author_order=author_order,
+    ))
