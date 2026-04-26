@@ -153,22 +153,42 @@ export default function AdminDashboard() {
             };
 
             if (editingPaper) {
-                await fetch(`${API}/api/papers/${editingPaper.id}`, {
+                const res = await fetch(`${API}/api/papers/${editingPaper.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
+                if (!res.ok) throw new Error('update failed');
             } else {
-                await fetch(`${API}/api/papers/ingest`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
+                // Ingest is multipart/form-data (pdf_url | pdf_file | title+abstract), not JSON.
+                const fd = new FormData();
+                const authorsStr = form.authors
+                    .filter(a => a.name.trim())
+                    .map(a => a.name.trim())
+                    .join(', ');
+                if (form.pdf_url.trim()) {
+                    fd.append('pdf_url', form.pdf_url.trim());
+                    if (form.title.trim()) fd.append('title', form.title.trim());
+                    if (form.abstract.trim()) fd.append('abstract', form.abstract.trim());
+                    if (authorsStr) fd.append('authors', authorsStr);
+                } else {
+                    if (!form.title.trim() || !form.abstract.trim()) {
+                        throw new Error('Add a PDF URL, or fill in title and abstract.');
+                    }
+                    fd.append('title', form.title.trim());
+                    fd.append('abstract', form.abstract.trim());
+                    if (authorsStr) fd.append('authors', authorsStr);
+                }
+                const res = await fetch(`${API}/api/papers/ingest`, { method: 'POST', body: fd });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(text || 'ingest failed');
+                }
             }
             await fetchPapers();
             closeModal();
-        } catch {
-            setError('Failed to save paper.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to save paper.');
         } finally {
             setSubmitting(false);
         }

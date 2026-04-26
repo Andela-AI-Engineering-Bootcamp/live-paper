@@ -153,7 +153,15 @@ async def run_manual(
         await storage.store_embedding(
             text=title,
             vector=vector,
-            metadata={"paper_id": paper_id, "title": title, "authors": ", ".join(authors)},
+            metadata={
+                "paper_id": paper_id,
+                "title": title,
+                "authors": ", ".join(authors),
+                # Match the PDF paths so chat passages render the actual
+                # paper content instead of the "See paper for details"
+                # placeholder that retrieval.py falls back to.
+                "findings": "; ".join(extraction.findings[:3]),
+            },
             paper_id=paper_id,
         )
         await graph.write_paper_node(paper_id, {"title": title, "authors": authors})
