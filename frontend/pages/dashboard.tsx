@@ -343,7 +343,7 @@ export default function AdminDashboard() {
                             <thead>
                                 <tr className="border-b border-[#e0d8cf] bg-[#faf7f4]">
                                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-[#8a7060] uppercase tracking-wider">Title</th>
-                                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-[#8a7060] uppercase tracking-wider hidden md:table-cell">Authors</th>
+
                                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-[#8a7060] uppercase tracking-wider hidden lg:table-cell">Abstract</th>
                                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-[#8a7060] uppercase tracking-wider">Links</th>
                                     <th className="px-5 py-3.5 text-xs font-semibold text-[#8a7060] uppercase tracking-wider text-right">Actions</th>
@@ -360,7 +360,7 @@ export default function AdminDashboard() {
                                                 {paper.title}
                                             </p>
                                         </td>
-                                        <td className="px-5 py-4 text-[#5a4535] hidden md:table-cell max-w-[160px]">
+                                        {/* <td className="px-5 py-4 text-[#5a4535] hidden md:table-cell max-w-[160px]">
                                             <div className="space-y-0.5">
                                                 {paper.authors?.slice(0, 2).map((a, idx) => (
                                                     <p key={idx} className="text-xs leading-snug">
@@ -374,7 +374,7 @@ export default function AdminDashboard() {
                                                     <p className="text-xs text-[#8a7060]">+{paper.authors.length - 2} more</p>
                                                 )}
                                             </div>
-                                        </td>
+                                        </td> */}
                                         <td className="px-5 py-4 text-[#8a7060] hidden lg:table-cell max-w-[260px]">
                                             <p className="line-clamp-2 text-xs leading-relaxed">{paper.abstract}</p>
                                         </td>

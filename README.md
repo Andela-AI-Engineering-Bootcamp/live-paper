@@ -41,8 +41,8 @@ Here we use a model to rank the result from the
 
 | Endpoint | URL |
 |---|---|
-| Frontend | [https://d1xrrwd5ltx7wh.cloudfront.net](https://d1xrrwd5ltx7wh.cloudfront.net) (CloudFront → S3 static export) |
-| Backend API | [https://tdiwu3dznt.us-east-1.awsapprunner.com](https://tdiwu3dznt.us-east-1.awsapprunner.com) (App Runner) |
+| Frontend | [https://d69yz55ie5or9.cloudfront.net](https://d69yz55ie5or9.cloudfront.net) (CloudFront → S3 static export) |
+| Backend API | [https://whiuf23y2t.us-east-1.awsapprunner.com](https://whiuf23y2t.us-east-1.awsapprunner.com) (App Runner) |
 | Health check | `GET /api/health` → `{"status":"ok","service":"livepaper-api","graph_nodes":0}` |
 
 ---
@@ -175,8 +175,8 @@ The S3 Vectors bucket and its `papers` index are created out-of-band via `aws s3
 Outputs after apply:
 
 ```bash
-terraform output frontend_url            # https://d1xrrwd5ltx7wh.cloudfront.net
-terraform output backend_url             # https://tdiwu3dznt.us-east-1.awsapprunner.com
+terraform output frontend_url            # https://d69yz55ie5or9.cloudfront.net
+terraform output backend_url             # https://whiuf23y2t.us-east-1.awsapprunner.com
 terraform output ecr_repository_url      # 375510692572.dkr.ecr.us-east-1.amazonaws.com/livepaper-backend
 terraform output frontend_bucket         # livepaper-frontend-375510692572
 terraform output cloudfront_distribution_id
@@ -245,7 +245,7 @@ Required GitHub repo secrets:
 
 ## API Reference
 
-All endpoints are served at `http://localhost:8000` in dev, and at `https://tdiwu3dznt.us-east-1.awsapprunner.com` in production.
+All endpoints are served at `http://localhost:8000` in dev, and at `https://whiuf23y2t.us-east-1.awsapprunner.com` in production.
 Set `NEXT_PUBLIC_API_URL` in the frontend `.env.local` to point to the right backend.
 
 | Method | Path | Description |
