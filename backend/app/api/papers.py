@@ -54,19 +54,22 @@ async def ingest_paper(
         try:
             parsed = json.loads(authors)
             if isinstance(parsed, list):
-                # Accept [{name, email}] — filter out empty names
                 author_list = [
                     {"name": a.get("name", "").strip(), "email": a.get("email", "").strip()}
+                    if isinstance(a, dict)
+                    else {"name": str(a).strip(), "email": ""}
                     for a in parsed
-                    if isinstance(a, dict) and a.get("name", "").strip()
+                    if (a.get("name", "") if isinstance(a, dict) else str(a)).strip()
                 ]
             else:
-                raise ValueError("authors must be a JSON array")
-        except (json.JSONDecodeError, ValueError) as e:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid authors format. Expected JSON array of {{name, email}} objects: {e}",
-            )
+                raise ValueError
+        except (json.JSONDecodeError, ValueError):
+            # Accept plain comma-separated string: "Smith, J.; Doe, A."
+            author_list = [
+                {"name": n.strip(), "email": ""}
+                for n in authors.replace(";", ",").split(",")
+                if n.strip()
+            ]
 
     await db.create_paper(
         paper_id=pid,
@@ -99,8 +102,6 @@ async def ingest_paper(
     return IngestResponse(job_id=job_id, status="pending", message="Ingestion queued")
 
 
-# ── Background ingestion task ─────────────────────────────────────────────────
-
 async def _run_ingestion(
     job_id: str,
     paper_id: str,
@@ -110,49 +111,38 @@ async def _run_ingestion(
     authors: list[dict],
     abstract: Optional[str],
 ) -> None:
-    """Run the ingestion pipeline in the background.
-
-    Three paths (in priority order):
-      1. pdf_url  — agent downloads and extracts
-      2. tmp_path — uploaded file, same pipeline as (1)
-      3. manual   — title + abstract only, no PDF
-    """
+    """Background task: run ingestion agent and update job + paper records."""
+    import asyncio
     await db.update_job(job_id, status="running")
-    await db.update_paper(paper_id, status="running")
     try:
-        if pdf_url:
-            extraction = await ingestion.run(pdf_url, paper_id=paper_id)
-        elif tmp_path:
+        if tmp_path:
             extraction = await ingestion.run_from_file(tmp_path, paper_id=paper_id)
+        elif pdf_url:
+            extraction = await ingestion.run(pdf_url, paper_id=paper_id)
         else:
             extraction = await ingestion.run_manual(
                 paper_id=paper_id,
-                title=title,
-                authors=authors,
-                abstract=abstract,
+                title=title or "",
+                authors=[a.get("name", "") for a in authors],
+                abstract=abstract or "",
             )
-
-        result = extraction.model_dump()
-        await db.update_job(job_id, status="completed", result=result)
         await db.update_paper(
             paper_id,
             title=extraction.title,
-            authors=extraction.authors,
-            abstract=extraction.abstract,
-            status="completed",
+            authors=[a for a in (a.get("name", "") for a in authors) if a] or extraction.authors,
             key_concepts=extraction.key_concepts,
+            methods=extraction.methods,
             findings=extraction.findings,
+            open_questions=extraction.open_questions,
+            extraction_confidence=extraction.confidence,
+            status="completed",
         )
+        await db.update_job(job_id, status="completed", result={"title": extraction.title})
     except Exception as exc:
-        logger.error("Ingestion job %s failed: %s", job_id, exc)
-        await db.update_job(job_id, status="failed", error=str(exc))
+        logger.error("Ingestion failed for paper %s: %s", paper_id, exc)
         await db.update_paper(paper_id, status="failed")
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        await db.update_job(job_id, status="failed", error=str(exc))
 
-
-# ── Jobs ──────────────────────────────────────────────────────────────────────
 
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str) -> dict:

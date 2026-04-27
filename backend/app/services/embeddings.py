@@ -1,7 +1,12 @@
-"""Embedding service — SageMaker Serverless endpoint (same as Alex course project).
+"""Embedding service — SageMaker → OpenAI → sentence-transformers fallback chain.
 
-Falls back to a local sentence-transformers model when SAGEMAKER_ENDPOINT
-is not set, so the team can develop without AWS credentials.
+Priority:
+  1. SageMaker (when SAGEMAKER_ENDPOINT is set and reachable)
+  2. OpenAI text-embedding-3-small at 384 dims (when OPENAI_API_KEY is set)
+  3. Local sentence-transformers all-MiniLM-L6-v2 (dev only, no API key)
+
+All three paths produce 384-dimensional vectors to match the S3 Vectors
+index created with --dimension 384 --distance-metric cosine.
 """
 
 import json
@@ -24,28 +29,24 @@ def _get_runtime():
 
 
 async def embed(text: str) -> list[float]:
-    """Return a 384-dimensional embedding for the given text.
-
-    Uses SageMaker endpoint in production, falls back to local model in dev.
-    """
+    """Return a 384-dimensional embedding for the given text."""
     endpoint = os.getenv("SAGEMAKER_ENDPOINT", "")
 
-    if not endpoint:
-        return await _local_embed(text)
+    if endpoint:
+        try:
+            runtime = _get_runtime()
+            payload = json.dumps({"inputs": text})
+            response = runtime.invoke_endpoint(
+                EndpointName=endpoint,
+                ContentType="application/json",
+                Body=payload,
+            )
+            result = json.loads(response["Body"].read())
+            return _to_sentence_vector(result)
+        except Exception as exc:
+            logger.warning("SageMaker embedding failed, falling back to OpenAI: %s", exc)
 
-    try:
-        runtime = _get_runtime()
-        payload = json.dumps({"inputs": text})
-        response = runtime.invoke_endpoint(
-            EndpointName=endpoint,
-            ContentType="application/json",
-            Body=payload,
-        )
-        result = json.loads(response["Body"].read())
-        return _to_sentence_vector(result)
-    except Exception as exc:
-        logger.warning("SageMaker embedding failed, using local fallback: %s", exc)
-        return await _local_embed(text)
+    return await _openai_embed(text)
 
 
 def _to_sentence_vector(result) -> list[float]:
@@ -78,20 +79,33 @@ def _to_sentence_vector(result) -> list[float]:
     raise ValueError("Embedding payload shape not recognised")
 
 
-async def _local_embed(text: str) -> list[float]:
-    """Local fallback using sentence-transformers (dev only).
+async def _openai_embed(text: str) -> list[float]:
+    """OpenAI text-embedding-3-small at 384 dims — matches S3 Vectors index dimension."""
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if api_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text,
+                dimensions=384,
+            )
+            return response.data[0].embedding
+        except Exception as exc:
+            logger.warning("OpenAI embedding failed, falling back to local model: %s", exc)
 
-    Raises if sentence-transformers is unavailable. Returning a zero vector
-    here used to silently poison S3 Vectors queries — every search would hit
-    `ValidationException: Query vector contains invalid values`. Better to
-    fail loud so the upstream caller (and logs) surface the real problem.
-    """
+    return await _local_embed(text)
+
+
+async def _local_embed(text: str) -> list[float]:
+    """Local sentence-transformers fallback — dev only, no API key required."""
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
         raise RuntimeError(
-            "Embedding service unavailable: SAGEMAKER_ENDPOINT is unset or failing "
-            "and sentence-transformers is not installed for local fallback."
+            "Embedding service unavailable: no SAGEMAKER_ENDPOINT, no OPENAI_API_KEY, "
+            "and sentence-transformers is not installed."
         ) from exc
 
     model = SentenceTransformer("all-MiniLM-L6-v2")

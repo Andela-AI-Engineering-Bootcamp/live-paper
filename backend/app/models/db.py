@@ -183,3 +183,28 @@ class EscalationEvent(Base):
     source_paper_ids = Column(StringList, default=list)
     resolved = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Author(Base):
+    """Normalized author records — deduped by email or name."""
+    __tablename__ = "authors"
+
+    id = Column(String(64), primary_key=True, default=_uuid)
+    name = Column(String(300), nullable=False)
+    email = Column(String(300), unique=True, nullable=True)
+    affiliation = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    papers = relationship("PaperAuthor", back_populates="author")
+
+
+class PaperAuthor(Base):
+    """Join table linking papers to normalized author records."""
+    __tablename__ = "paper_authors"
+
+    paper_id = Column(String(64), ForeignKey("papers.id"), primary_key=True)
+    author_id = Column(String(64), ForeignKey("authors.id"), primary_key=True)
+    author_order = Column(String(10), default="0")
+
+    paper = relationship("Paper")
+    author = relationship("Author", back_populates="papers")
