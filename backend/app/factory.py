@@ -63,3 +63,4 @@ def create_app() -> FastAPI:
         return {"service": "livepaper-api", "status": "ok", "docs": "/docs"}
 
     return app
+

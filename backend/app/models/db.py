@@ -61,7 +61,6 @@ class Paper(Base):
 
     id = Column(String(64), primary_key=True, default=_uuid)
     title = Column(String(500), nullable=False)
-    authors = Column(StringList, nullable=False, default=list)
     abstract = Column(Text, default="")
     pdf_url = Column(String(2000))
     status = Column(String(20), nullable=False, default="pending")  # pending|running|completed|failed
@@ -76,7 +75,32 @@ class Paper(Base):
 
     jobs = relationship("Job", back_populates="paper", cascade="all, delete-orphan")
     expert_responses = relationship("ExpertResponseRecord", back_populates="paper")
+    authors = relationship("Author", back_populates="paper")
 
+class Author(Base):
+    """Tracks async ingestion and escalation jobs."""
+    __tablename__ = "authors"
+
+    id = Column(String(64), primary_key=True, default=_uuid)
+    paper_id = Column(String(64), ForeignKey("papers.id"), nullable=True)
+    name = Column(String(500), nullable=False)
+    email = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+
+    paper = relationship("Paper", back_populates="authors")
+
+class PaperAuthor(Base):
+    """Tracks async ingestion and escalation jobs."""
+    __tablename__ = "paper_authors"
+
+    id = Column(String(64), primary_key=True, default=_uuid)
+    paper_id = Column(String(64), ForeignKey("papers.id"), nullable=True)
+    author_id = Column(String(64), ForeignKey("authors.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+
+    paper = relationship("Paper", back_populates="authors")
 
 class Job(Base):
     """Tracks async ingestion and escalation jobs."""
@@ -93,6 +117,14 @@ class Job(Base):
     completed_at = Column(DateTime(timezone=True))
 
     paper = relationship("Paper", back_populates="jobs")
+
+class ExpertPaper(Base):
+    __tablename__ = "expert_papers"
+
+    id = Column(String(64), primary_key=True, default=_uuid)
+    paper_id = Column(String(64), ForeignKey("papers.id"))
+    expert_id = Column(String(64), ForeignKey("experts.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Expert(Base):

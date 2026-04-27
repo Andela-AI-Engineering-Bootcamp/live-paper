@@ -84,6 +84,7 @@ export default function AdminDashboard() {
         try {
             const res = await fetch(`${API}/api/papers`);
             const data = await res.json();
+            console.log("papers", data);
             setPapers(data);
         } catch {
             setError('Failed to load papers.');
@@ -145,54 +146,62 @@ export default function AdminDashboard() {
     // ── Submit ────────────────────────────────────────────────────────────────
 
     async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        setSubmitting(true);
-        try {
-            const payload = {
-                ...form
-            };
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+        const payload = { ...form };
 
-            if (editingPaper) {
-                const res = await fetch(`${API}/api/papers/${editingPaper.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                if (!res.ok) throw new Error('update failed');
+        if (editingPaper) {
+            const res = await fetch(`${API}/api/papers/${editingPaper.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error('update failed');
+        } else {
+            const fd = new FormData();
+
+            // Always filter and serialize authors — do this once, before branching
+            const validAuthors = form.authors.filter(a => a.name.trim());
+            const authorsStr = JSON.stringify(
+                validAuthors.length > 0
+                    ? validAuthors
+                    : [] // send empty array, never empty string
+            );
+
+            console.log('authors payload:', authorsStr);
+
+            if (form?.pdf_url?.trim()) {
+                fd.append('pdf_url', form.pdf_url.trim());
+                if (form.title.trim())    fd.append('title',    form.title.trim());
+                if (form.abstract.trim()) fd.append('abstract', form.abstract.trim());
+                fd.append('authors', authorsStr); 
             } else {
-                // Ingest is multipart/form-data (pdf_url | pdf_file | title+abstract), not JSON.
-                const fd = new FormData();
-                const authorsStr = form.authors
-                    .filter(a => a.name.trim())
-                    .map(a => a.name.trim())
-                    .join(', ');
-                if (form?.pdf_url?.trim()) {
-                    fd.append('pdf_url', form?.pdf_url?.trim());
-                    if (form.title.trim()) fd.append('title', form.title.trim());
-                    if (form.abstract.trim()) fd.append('abstract', form.abstract.trim());
-                    if (authorsStr) fd.append('authors', authorsStr);
-                } else {
-                    if (!form.title.trim() || !form.abstract.trim()) {
-                        throw new Error('Add a PDF URL, or fill in title and abstract.');
-                    }
-                    fd.append('title', form.title.trim());
-                    fd.append('abstract', form.abstract.trim());
-                    if (authorsStr) fd.append('authors', authorsStr);
+                if (!form.title.trim() || !form.abstract.trim()) {
+                    throw new Error('Add a PDF URL, or fill in title and abstract.');
                 }
-                const res = await fetch(`${API}/api/papers/ingest`, { method: 'POST', body: fd });
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(text || 'ingest failed');
-                }
+                fd.append('title',    form.title.trim());
+                fd.append('abstract', form.abstract.trim());
+                fd.append('authors',  authorsStr); 
             }
-            await fetchPapers();
-            closeModal();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save paper.');
-        } finally {
-            setSubmitting(false);
+
+            const res = await fetch(`${API}/api/papers/ingest`, {
+                method: 'POST',
+                body: fd,
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || 'ingest failed');
+            }
         }
+        await fetchPapers();
+        closeModal();
+    } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save paper.');
+    } finally {
+        setSubmitting(false);
     }
+}
 
     async function handleDelete(id: string) {
         setDeleteId(id);
@@ -233,12 +242,13 @@ export default function AdminDashboard() {
         setInviteSubmitting(true);
         setInviteError('');
         try {
-            const res = await fetch(`${API}/api/papers/${invitingPaper.id}/invite-expert`, {
+            const res = await fetch(`${API}/api/experts/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    expert_email: inviteEmail.trim(),
-                    expert_name: inviteName.trim() || undefined,
+                    email: inviteEmail.trim(),
+                    name: inviteName.trim() || undefined,
+                    paper_id: invitingPaper.id,
                 }),
             });
             if (!res.ok) {

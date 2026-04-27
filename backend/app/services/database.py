@@ -11,10 +11,12 @@ import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from urllib.parse import quote_plus
-
+from app.models.db import Expert, ExpertPaper, PaperAuthor, Job, Base, Author, ExpertResponseRecord, Paper
+import uuid
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from datetime import datetime, timezone
 
-from app.models.db import Base
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +114,6 @@ async def init_db() -> None:
 
 async def get_job(job_id: str) -> dict | None:
     """Fetch a job by ID — used by the /jobs/{id} polling endpoint."""
-    from sqlalchemy import select
-    from app.models.db import Job
 
     async with get_session() as session:
         result = await session.execute(select(Job).where(Job.id == job_id))
@@ -132,7 +132,6 @@ async def get_job(job_id: str) -> dict | None:
 
 async def create_job(job_id: str, job_type: str = "ingestion", paper_id: str | None = None) -> None:
     """Insert a new pending job row."""
-    from app.models.db import Job
 
     async with get_session() as session:
         session.add(Job(id=job_id, job_type=job_type, paper_id=paper_id, status="pending"))
@@ -146,9 +145,7 @@ async def update_job(
     trace_id: str | None = None,
 ) -> None:
     """Update job status, result, and error fields."""
-    from datetime import datetime, timezone
-    from sqlalchemy import select
-    from app.models.db import Job
+    
 
     async with get_session() as session:
         result_row = await session.execute(select(Job).where(Job.id == job_id))
@@ -182,15 +179,13 @@ def _paper_to_dict(p) -> dict:
 async def create_paper(
     paper_id: str,
     title: str,
-    authors: list[str],
+    authors: list[dict],
     abstract: str = "",
     status: str = "pending",
     pdf_url: str | None = None,
 ) -> None:
     """Insert a row in papers; safe to call multiple times — silently no-ops if
     the row already exists (so re-ingesting an existing paper_id reuses it)."""
-    from sqlalchemy import select
-    from app.models.db import Paper
 
     async with get_session() as session:
         existing = await session.execute(select(Paper.id).where(Paper.id == paper_id))
@@ -199,22 +194,26 @@ async def create_paper(
         session.add(Paper(
             id=paper_id,
             title=title,
-            authors=authors,
+            #authors=authors,
             abstract=abstract,
             status=status,
             pdf_url=pdf_url,
         ))
+
         # NEW: normalized authors (same session!)
-        for idx, author_name in enumerate(authors or []):
-            author_id = await upsert_author(session, name=author_name)
-            await link_author_to_paper(session, paper_id, author_id, idx)
+        for i, author in enumerate(authors):
+            author_id = await upsert_author(
+                session,
+                name=author.get("name", ""),
+                email=author.get("email"),
+                affiliation="",
+            )
+            await link_author_to_paper(session, paper_id, author_id, i)
 
 
 async def update_paper(paper_id: str, **fields) -> dict | None:
     """Patch a paper row. Unknown keys are ignored so callers can pass dicts
     that contain extra fields without crashing."""
-    from sqlalchemy import select
-    from app.models.db import Paper
 
     async with get_session() as session:
         result = await session.execute(select(Paper).where(Paper.id == paper_id))
@@ -229,8 +228,6 @@ async def update_paper(paper_id: str, **fields) -> dict | None:
 
 
 async def get_paper(paper_id: str) -> dict | None:
-    from sqlalchemy import select
-    from app.models.db import Paper
 
     async with get_session() as session:
         result = await session.execute(select(Paper).where(Paper.id == paper_id))
@@ -239,8 +236,6 @@ async def get_paper(paper_id: str) -> dict | None:
 
 
 async def list_papers() -> list[dict]:
-    from sqlalchemy import select
-    from app.models.db import Paper
 
     async with get_session() as session:
         result = await session.execute(select(Paper).order_by(Paper.created_at.desc()))
@@ -249,8 +244,6 @@ async def list_papers() -> list[dict]:
 
 async def delete_paper(paper_id: str) -> bool:
     """Returns True if a row was deleted, False if no such paper existed."""
-    from sqlalchemy import select
-    from app.models.db import Paper
 
     async with get_session() as session:
         result = await session.execute(select(Paper).where(Paper.id == paper_id))
@@ -273,9 +266,7 @@ async def upsert_expert(
     treated as the natural identifier even though the schema PK is a uuid;
     that lets the inviter pass just an email and the form submitter look the
     same person up later without a coordination step."""
-    import uuid
-    from sqlalchemy import select
-    from app.models.db import Expert
+    
 
     if not email:
         raise ValueError("email is required to upsert an expert")
@@ -306,8 +297,6 @@ async def upsert_expert(
 async def get_expert(expert_id: str) -> dict | None:
     """Return an expert with the papers they've responded to attached as full
     paper objects (matches the frontend Expert.papers shape)."""
-    from sqlalchemy import select
-    from app.models.db import Expert, ExpertResponseRecord, Paper
 
     async with get_session() as session:
         result = await session.execute(select(Expert).where(Expert.id == expert_id))
@@ -324,8 +313,6 @@ async def get_expert(expert_id: str) -> dict | None:
 
 
 async def list_experts() -> list[dict]:
-    from sqlalchemy import select
-    from app.models.db import Expert, ExpertResponseRecord, Paper
 
     async with get_session() as session:
         experts = (await session.execute(select(Expert).order_by(Expert.created_at.desc()))).scalars().all()
@@ -366,8 +353,6 @@ async def create_expert_response(
     """Insert an expert response row. Returns the new response id. `question`
     is required by the schema; for paper-level reviews (no specific question)
     callers should pass a placeholder like 'General expert review'."""
-    import uuid
-    from app.models.db import ExpertResponseRecord
 
     response_id = str(uuid.uuid4())
     async with get_session() as session:
@@ -384,7 +369,7 @@ async def create_expert_response(
 
 # ── Authors (NEW - normalized implementation) ────────────────────────────────────────────────
 
-from sqlalchemy import select, func
+
 
 async def upsert_author(
     session,
@@ -392,8 +377,6 @@ async def upsert_author(
     email: str | None = None,
     affiliation: str | None = None,
 ) -> str:
-    import uuid
-    from app.models.db import Author
 
     clean_name = name.strip()
     normalized_name = clean_name.lower()
@@ -430,8 +413,6 @@ async def link_author_to_paper(
     author_id: str,
     author_order: int,
 ) -> None:
-    from sqlalchemy import select
-    from app.models.db import PaperAuthor
 
     existing = await session.execute(
         select(PaperAuthor).where(
@@ -448,3 +429,42 @@ async def link_author_to_paper(
         author_id=author_id,
         author_order=author_order,
     ))
+
+
+
+
+async def get_expert_by_email(email: str) -> dict | None:
+    async with get_session() as session:
+        result = await session.execute(
+            select(Expert).where(Expert.email == email)
+        )
+        expert = result.scalar_one_or_none()
+        if not expert:
+            return None
+        return _expert_to_dict(expert, []) 
+
+
+async def create_expert(email: str, name: str) -> dict:
+    async with get_session() as session:
+        new_id = str(uuid.uuid4())
+        expert = Expert(
+            id=new_id,
+            email=email,
+            name=name or email.split("@")[0],
+        )
+        session.add(expert)
+        await session.flush()           
+        return _expert_to_dict(expert, [])
+
+
+async def associate_expert_paper(expert_id: str, paper_id: str) -> None:
+    async with get_session() as session:
+        existing = await session.execute(
+            select(ExpertPaper).where(
+                ExpertPaper.expert_id == expert_id,
+                ExpertPaper.paper_id == paper_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            return
+        session.add(ExpertPaper(expert_id=expert_id, paper_id=paper_id))

@@ -71,7 +71,7 @@ async def ingest_paper(
     await db.create_paper(
         paper_id=pid,
         title=title or "Processing…",
-        authors=[],  # ❗ DO NOT pre-fill authors
+        authors=author_list,
         abstract=abstract or "",
         status="pending",
         pdf_url=pdf_url,
@@ -99,6 +99,61 @@ async def ingest_paper(
     return IngestResponse(job_id=job_id, status="pending", message="Ingestion queued")
 
 
+# ── Background ingestion task ─────────────────────────────────────────────────
+
+async def _run_ingestion(
+    job_id: str,
+    paper_id: str,
+    pdf_url: Optional[str],
+    tmp_path: Optional[str],
+    title: Optional[str],
+    authors: list[dict],
+    abstract: Optional[str],
+) -> None:
+    """Run the ingestion pipeline in the background.
+
+    Three paths (in priority order):
+      1. pdf_url  — agent downloads and extracts
+      2. tmp_path — uploaded file, same pipeline as (1)
+      3. manual   — title + abstract only, no PDF
+    """
+    await db.update_job(job_id, status="running")
+    await db.update_paper(paper_id, status="running")
+    try:
+        if pdf_url:
+            extraction = await ingestion.run(pdf_url, paper_id=paper_id)
+        elif tmp_path:
+            extraction = await ingestion.run_from_file(tmp_path, paper_id=paper_id)
+        else:
+            extraction = await ingestion.run_manual(
+                paper_id=paper_id,
+                title=title,
+                authors=authors,
+                abstract=abstract,
+            )
+
+        result = extraction.model_dump()
+        await db.update_job(job_id, status="completed", result=result)
+        await db.update_paper(
+            paper_id,
+            title=extraction.title,
+            authors=extraction.authors,
+            abstract=extraction.abstract,
+            status="completed",
+            key_concepts=extraction.key_concepts,
+            findings=extraction.findings,
+        )
+    except Exception as exc:
+        logger.error("Ingestion job %s failed: %s", job_id, exc)
+        await db.update_job(job_id, status="failed", error=str(exc))
+        await db.update_paper(paper_id, status="failed")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str) -> dict:
     job = await db.get_job(job_id)
@@ -107,7 +162,7 @@ async def get_job(job_id: str) -> dict:
     return job
 
 
-# ── CRUD ─────────────────────────────────────────────────────────────────────
+# ── CRUD ──────────────────────────────────────────────────────────────────────
 
 @router.get("")
 async def list_papers() -> list[dict]:
