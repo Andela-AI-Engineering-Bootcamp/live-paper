@@ -54,19 +54,22 @@ async def ingest_paper(
         try:
             parsed = json.loads(authors)
             if isinstance(parsed, list):
-                # Accept [{name, email}] — filter out empty names
                 author_list = [
                     {"name": a.get("name", "").strip(), "email": a.get("email", "").strip()}
+                    if isinstance(a, dict)
+                    else {"name": str(a).strip(), "email": ""}
                     for a in parsed
-                    if isinstance(a, dict) and a.get("name", "").strip()
+                    if (a.get("name", "") if isinstance(a, dict) else str(a)).strip()
                 ]
             else:
-                raise ValueError("authors must be a JSON array")
-        except (json.JSONDecodeError, ValueError) as e:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid authors format. Expected JSON array of {{name, email}} objects: {e}",
-            )
+                raise ValueError
+        except (json.JSONDecodeError, ValueError):
+            # Accept plain comma-separated string: "Smith, J.; Doe, A."
+            author_list = [
+                {"name": n.strip(), "email": ""}
+                for n in authors.replace(";", ",").split(",")
+                if n.strip()
+            ]
 
     await db.create_paper(
         paper_id=pid,
@@ -97,6 +100,48 @@ async def ingest_paper(
     )
 
     return IngestResponse(job_id=job_id, status="pending", message="Ingestion queued")
+
+
+async def _run_ingestion(
+    job_id: str,
+    paper_id: str,
+    pdf_url: Optional[str],
+    tmp_path: Optional[str],
+    title: Optional[str],
+    authors: list[dict],
+    abstract: Optional[str],
+) -> None:
+    """Background task: run ingestion agent and update job + paper records."""
+    import asyncio
+    await db.update_job(job_id, status="running")
+    try:
+        if tmp_path:
+            extraction = await ingestion.run_from_file(tmp_path, paper_id=paper_id)
+        elif pdf_url:
+            extraction = await ingestion.run(pdf_url, paper_id=paper_id)
+        else:
+            extraction = await ingestion.run_manual(
+                paper_id=paper_id,
+                title=title or "",
+                authors=[a.get("name", "") for a in authors],
+                abstract=abstract or "",
+            )
+        await db.update_paper(
+            paper_id,
+            title=extraction.title,
+            authors=[a for a in (a.get("name", "") for a in authors) if a] or extraction.authors,
+            key_concepts=extraction.key_concepts,
+            methods=extraction.methods,
+            findings=extraction.findings,
+            open_questions=extraction.open_questions,
+            extraction_confidence=extraction.confidence,
+            status="completed",
+        )
+        await db.update_job(job_id, status="completed", result={"title": extraction.title})
+    except Exception as exc:
+        logger.error("Ingestion failed for paper %s: %s", paper_id, exc)
+        await db.update_paper(paper_id, status="failed")
+        await db.update_job(job_id, status="failed", error=str(exc))
 
 
 @router.get("/jobs/{job_id}")
