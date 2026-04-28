@@ -26,7 +26,7 @@ from app.agents import retrieval, gap_detector, expert_router
 from app.agents.base import get_model
 from app.models.paper import RetrievalResult
 from app.services import database as db
-from app.research_vetter import ResearchVetter
+from app.tools.research_vetter import ResearchVetter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
