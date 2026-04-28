@@ -1,137 +1,83 @@
-"""Pydantic contracts for all five agent inputs and outputs.
+"""Pydantic models for the papers domain.
 
-Every agent reads one of these models and writes one of these models.
-Nothing touches the database without passing through validation here.
+These are the data-transfer objects used across agents and API endpoints.
+They are separate from the SQLAlchemy ORM models in app/models/db.py.
 """
+
+from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
+
+# ── Author ────────────────────────────────────────────────────────────────────
+
+class Author(BaseModel):
+    """Author of a paper — used in EscalationCard and PaperExtraction."""
+    name: str
+    email: Optional[str] = None          # required for email dispatch
+    affiliation: Optional[str] = None
+    relevance_score: float = 0.0
+
+
+# ── Paper extraction (output of ingestion agent) ──────────────────────────────
 
 class PaperExtraction(BaseModel):
-    """Output of the Ingestion Agent — structured knowledge pulled from a PDF."""
+    """Structured knowledge extracted from a paper by the ingestion agent."""
     title: str
-    authors: list[str]
-    key_concepts: list[str]
-    methods: list[str]
-    findings: list[str]
-    open_questions: list[str]  # gaps the paper itself admits
-    confidence: float = Field(ge=0.0, le=1.0)
+    authors: list[str] = Field(default_factory=list)   # plain name strings
+    abstract: str = ""
+    key_concepts: list[str] = Field(default_factory=list)
+    methods: list[str] = Field(default_factory=list)
+    findings: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    confidence: float = 0.8
 
+
+# ── Retrieval ─────────────────────────────────────────────────────────────────
 
 class CitedPassage(BaseModel):
-    """A single passage returned by the Retrieval Agent, with attribution."""
+    """A single retrieved passage with provenance."""
     text: str
     paper_title: str
-    authors: list[str]
-    page: Optional[int] = None
-    confidence: float = Field(ge=0.0, le=1.0)
+    authors: list[str] = Field(default_factory=list)   # plain name strings
+    confidence: float = 0.0
 
 
 class RetrievalResult(BaseModel):
-    """Output of the Retrieval Agent — ranked passages + escalation decision."""
+    """Full output of the retrieval agent."""
     question: str
-    passages: list[CitedPassage]
-    top_confidence: float = Field(ge=0.0, le=1.0)
-    escalate: bool  # True when top_confidence < GAP_CONFIDENCE_THRESHOLD
+    passages: list[CitedPassage] = Field(default_factory=list)
+    top_confidence: float = 0.0
+    escalate: bool = False
 
 
-class Author(BaseModel):
-    """A candidate expert identified by the Expert Router Agent."""
-    name: str
-    email: Optional[str] = None
+# ── Expert response (submitted via the expert-response page) ──────────────────
+
+class ExpertResponse(BaseModel):
+    """An expert's reply to an escalated question."""
+    expert_name: str
     affiliation: Optional[str] = None
-    relevance_score: float = Field(ge=0.0, le=1.0)
+    source_paper_id: str
+    response_text: str
 
+
+# ── Escalation ────────────────────────────────────────────────────────────────
 
 class EscalationCard(BaseModel):
-    """Output of the Expert Router Agent — structured question sent to an expert."""
+    """Structured escalation card produced by the expert router."""
     question: str
     gap_description: str
-    candidate_authors: list[Author]
-    source_paper_ids: list[str]
+    candidate_authors: list[Author] = Field(default_factory=list)
+    source_paper_ids: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class ExpertResponse(BaseModel):
-    """Output of the Response Ingestion Agent — expert answer ready for the graph."""
-    expert_name: str = Field(min_length=1)
-    affiliation: Optional[str] = None
-    response_text: str = Field(min_length=1)
-    source_paper_id: str = Field(min_length=1)
-    ingested_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-# ── API request/response shapes ───────────────────────────────────────────────
-
-class IngestRequest(BaseModel):
-    # Path 1 — PDF URL (ingestion agent downloads + extracts everything)
-    pdf_url: Optional[str] = None
-
-    # Path 2 — Manual fields (no PDF needed; pdf_url takes priority if both provided)
-    paper_id: Optional[str] = None
-    title: Optional[str] = None
-    authors: Optional[list[str]] = None
-    abstract: Optional[str] = None
-
-    @model_validator(mode="after")
-    def require_pdf_url_or_manual_fields(self) -> "IngestRequest":
-        has_pdf = bool(self.pdf_url)
-        has_manual = bool(self.title and self.abstract)
-        if not has_pdf and not has_manual:
-            raise ValueError("Provide either pdf_url or (title + abstract)")
-        return self
-
+# ── Ingest API ────────────────────────────────────────────────────────────────
 
 class IngestResponse(BaseModel):
+    """Returned immediately when an ingestion job is queued."""
     job_id: str
     status: str
-    message: str
-
-
-class AskRequest(BaseModel):
-    question: str
-    paper_ids: Optional[list[str]] = None  # scope to specific papers
-
-
-class AskResponse(BaseModel):
-    question: str
-    passages: list[CitedPassage]
-    escalated: bool
-    escalation_card: Optional[EscalationCard] = None
-    trace_id: Optional[str] = None
-
-
-class JobStatus(BaseModel):
-    job_id: str
-    status: str  # pending | running | completed | failed
-    created_at: datetime
-    result: Optional[dict] = None
-    error: Optional[str] = None
-
-
-class ExpertResponseSubmission(BaseModel):
-    """Body of POST /api/expert-responses — what the expert-response form posts
-    after an admin sent the expert an invite link."""
-    paper_id: str = Field(min_length=1)
-    expert_email: str = Field(min_length=3)  # accept loose strings; we just upsert by it
-    response: str = Field(min_length=1)
-    expert_name: Optional[str] = None  # optional override; defaults to email local-part
-
-
-class ExpertInviteRequest(BaseModel):
-    """Body of POST /api/papers/{paper_id}/invite-expert — an admin uses this
-    to mint an invite link (email sending is intentionally out of scope; the
-    response carries the link for the admin to deliver however they want)."""
-    expert_email: str = Field(min_length=3)
-    expert_name: Optional[str] = None
-    affiliation: Optional[str] = None
-
-
-class ExpertInviteResponse(BaseModel):
-    expert_id: str
-    invite_url: str
-    paper_id: str
-    expert_email: str
     message: str
